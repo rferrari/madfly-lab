@@ -46,17 +46,18 @@ export class LabObserver {
       position: 'fixed', top: '0', right: '0', width: `${PANEL_W + 24}px`,
       padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px',
       font: `11px ${CSS.font}`, color: CSS.bone, pointerEvents: 'none', zIndex: '10',
+      alignItems: 'stretch',
     });
     this.container.appendChild(root);
     this.root = root;
 
-    this.header = this._panel(root, 'MADFLY LAB');
+    this.header = this._panel(root, 'MADFLY LAB', 32);
     this.headerBody = document.createElement('div');
     this.headerBody.style.lineHeight = '1.6';
     this.header.appendChild(this.headerBody);
 
     if (this.enabledPanels.includes('retina') && lab.avatar.eyes) {
-      const panel = this._panel(root, 'RETINAL VISION');
+      const panel = this._panel(root, 'RETINAL VISION', 130);
       this.retinaCanvas = this._canvas(panel, PANEL_W, 110);
       this.retinaView = new RetinalView(this.retinaCanvas, {
         L: lab.avatar.eyes.L.retina, R: lab.avatar.eyes.R.retina,
@@ -64,7 +65,7 @@ export class LabObserver {
     }
 
     if (this.enabledPanels.includes('cloud')) {
-      const panel = this._panel(root, 'BRAIN SOMA CLOUD');
+      const panel = this._panel(root, 'BRAIN SOMA CLOUD', 220);
       this.cloudPanel = panel;
       this.cloudCanvas = this._canvas(panel, PANEL_W, 190);
       // Mode B supplies a pack; Mode A supplies decoded soma positions.
@@ -121,11 +122,104 @@ export class LabObserver {
     }
 
     if (this.enabledPanels.includes('telemetry')) {
-      const panel = this._panel(root, 'TELEMETRY');
+      const panel = this._panel(root, 'TELEMETRY', 170);
       this.telemetryCanvas = this._canvas(panel, PANEL_W, 150);
       const traces = this.requestedTraces ?? this._autoTraces(lab);
       this.telemetry = new Telemetry(this.telemetryCanvas, traces);
     }
+
+    // Store lab reference for button callbacks
+    this.lab = lab;
+
+    // Dynamic state panel (feeding, genome circuits, etc)
+    const statePanel = this._panel(root, 'STATE', 40);
+    this.statePanel = statePanel;
+    this.stateContent = document.createElement('div');
+    this.stateContent.style.cssText = 'font-size:10px;line-height:1.4;color:' + CSS.dim;
+    statePanel.appendChild(this.stateContent);
+
+    // Recording controls panel
+    const recPanel = this._panel(root, 'RECORDING', 90);
+    
+    // Add recording indicator to title
+    const recTitle = recPanel.querySelector('div');
+    this.recordingIndicator = document.createElement('span');
+    this.recordingIndicator.textContent = ' ●';
+    this.recordingIndicator.style.cssText = `color:${CSS.dim};margin-left:6px;animation:none;`;
+    recTitle.appendChild(this.recordingIndicator);
+
+    const recButtonsDiv = document.createElement('div');
+    recButtonsDiv.style.cssText = 'display:flex;flex-direction:row;gap:4px;flex-wrap:wrap;';
+
+    const mkRecBtn = (text, title, onClick, bgColor = CSS.panel) => {
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.title = title;
+      btn.style.cssText = `background:${bgColor};color:${CSS.bone};`
+        + `border:1px solid ${CSS.border};border-radius:4px;font:9px ${CSS.font};`
+        + `cursor:pointer;padding:4px 6px;white-space:nowrap;transition:all 0.2s;flex:1;min-width:50px;`;
+      btn.onmouseover = () => {
+        btn.style.borderColor = CSS.cyan;
+        btn.style.color = CSS.cyan;
+      };
+      btn.onmouseout = () => {
+        btn.style.borderColor = CSS.border;
+        btn.style.color = CSS.bone;
+      };
+      btn.onclick = onClick;
+      return btn;
+    };
+
+    // Record button (toggles)
+    this.recordBtn = mkRecBtn(
+      '● Record',
+      'Start/stop recording',
+      () => this.lab.toggleRecording(),
+      'rgba(200, 50, 50, 0.3)'
+    );
+    recButtonsDiv.appendChild(this.recordBtn);
+
+    // Replay button
+    const replayBtn = mkRecBtn(
+      '▶ Replay',
+      'Open replay modal',
+      () => this.lab.screenRecorder.openReplayModal(),
+      'rgba(50, 100, 200, 0.3)'
+    );
+    recButtonsDiv.appendChild(replayBtn);
+
+    // Export MP4 button
+    const exportVideoBtn = mkRecBtn(
+      '💾 MP4',
+      'Export as MP4 video',
+      () => this.lab.screenRecorder.exportVideo(),
+      'rgba(50, 150, 50, 0.3)'
+    );
+    recButtonsDiv.appendChild(exportVideoBtn);
+
+    // Export JSON button
+    const exportJsonBtn = mkRecBtn(
+      '📊 JSON',
+      'Export telemetry as JSON',
+      () => this.lab.screenRecorder.exportTelemetry(),
+      'rgba(150, 100, 50, 0.3)'
+    );
+    recButtonsDiv.appendChild(exportJsonBtn);
+
+    // Clear button
+    const clearBtn = mkRecBtn(
+      '🗑 Clear',
+      'Clear recording (cannot undo)',
+      () => {
+        if (confirm('Clear recording? This cannot be undone.')) {
+          this.lab.screenRecorder.clear();
+        }
+      },
+      'rgba(100, 50, 100, 0.3)'
+    );
+    recButtonsDiv.appendChild(clearBtn);
+
+    recPanel.appendChild(recButtonsDiv);
 
     // The one interactive affordance: H hides the whole overlay for screenshots.
     window.addEventListener('keydown', (e) => {
@@ -164,11 +258,13 @@ export class LabObserver {
       .map((channel, i) => ({ channel, color: [CSS.cyan, CSS.magenta, CSS.lime, CSS.amber][i % 4] }));
   }
 
-  _panel(root, title) {
+  _panel(root, title, minHeight = null) {
     const panel = document.createElement('div');
     Object.assign(panel.style, {
       background: CSS.panel, border: `1px solid ${CSS.border}`, borderRadius: '8px',
       padding: '8px 10px', backdropFilter: 'blur(8px)',
+      flexShrink: '0',  // Reserve space, don't collapse
+      ...(minHeight && { minHeight: `${minHeight}px` }),  // Set minimum height if provided
     });
     const h = document.createElement('div');
     h.textContent = title;
@@ -192,6 +288,29 @@ export class LabObserver {
   update(lab, dt) {
     if (!this.visible) return;
     const { brain, avatar } = lab;
+
+    // Update record button and indicator state
+    if (this.recordBtn && this.recordingIndicator && lab.screenRecorder) {
+      if (lab.screenRecorder.isRecording) {
+        this.recordBtn.textContent = '⏹ Stop';
+        this.recordBtn.style.background = 'rgba(255, 50, 50, 0.6)';
+        this.recordBtn.style.color = '#ff3333';
+        
+        // Blinking indicator
+        this.recordingIndicator.textContent = ' ●';
+        this.recordingIndicator.style.color = '#ff3333';
+        this.recordingIndicator.style.animation = 'blink 0.6s infinite';
+      } else {
+        this.recordBtn.textContent = '● Record';
+        this.recordBtn.style.background = 'rgba(200, 50, 50, 0.3)';
+        this.recordBtn.style.color = CSS.bone;
+        
+        // Dim indicator
+        this.recordingIndicator.textContent = ' ●';
+        this.recordingIndicator.style.color = CSS.dim;
+        this.recordingIndicator.style.animation = 'none';
+      }
+    }
 
     if (this.retinaView && avatar.eyes) {
       this.retinaView.draw(
@@ -220,16 +339,10 @@ export class LabObserver {
       this.headerBody.innerHTML = [
         `<span style="color:${CSS.cyan}">${modeLabel}</span>`,
         `<span style="color:${CSS.dim}">circuit</span> ${brain.circuit}`,
-        lab.genotype
-          ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
-          : '',
         `<span style="color:${CSS.dim}">neurons</span> ${brain.nNeurons.toLocaleString()}`,
 
         `<span style="color:${CSS.dim}">speed</span> ${avatar.speed.toFixed(2)} u/s`,
         `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">L ${avatar.sensors.loomL.toFixed(2)} R ${avatar.sensors.loomR.toFixed(2)}</span>`,
-        avatar.feeding
-          ? `<span style="color:${CSS.lime}">FEEDING · DNp06 ${avatar.motor.feeding.toFixed(2)}</span>`
-          : '',
         avatar.sensors.wind > 0.02
           ? `<span style="color:${CSS.dim}">wind</span> <span style="color:${CSS.cyan}">${avatar.sensors.wind.toFixed(2)}</span>`
           : '',
@@ -237,9 +350,49 @@ export class LabObserver {
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`
           : `<span style="color:${CSS.dim}">scent</span> —`,
-        `<span style="color:${CSS.dim}">H to hide</span>`,
+        // `<span style="color:${CSS.dim}">H to hide</span>`, //duplicated.
       ].filter(Boolean).join('<br>');
     }
+
+    // Update STATE panel with genotype and feeding info
+    if (this.stateContent) {
+      const stateItems = [
+        lab.genotype
+          ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
+          : '',
+        avatar.feeding
+          ? `<span style="color:${CSS.lime}">FEEDING · DNp06 ${avatar.motor.feeding.toFixed(2)}</span>`
+          : '',
+      ];
+      const stateHTML = stateItems.filter(Boolean).join('<br>');
+      // Always reserve space with at least a space character to prevent flicker
+      this.stateContent.innerHTML = stateHTML || '&nbsp;';
+    }
+  }
+
+  /** Set STATE panel content (e.g., feeding mode, genome info).
+   *  Pass null to clear. Content stays at bottom, reserved space prevents flicker. */
+  setState(content) {
+    if (!this.stateContent) return;
+    if (content === null || content === undefined) {
+      this.stateContent.innerHTML = '';
+    } else if (typeof content === 'string') {
+      this.stateContent.textContent = content;
+    } else if (content instanceof HTMLElement) {
+      this.stateContent.innerHTML = '';
+      this.stateContent.appendChild(content);
+    }
+  }
+
+  /** Set STATE panel HTML content directly */
+  setStateHTML(html) {
+    if (!this.stateContent) return;
+    this.stateContent.innerHTML = html;
+  }
+
+  /** Clear STATE panel content */
+  clearState() {
+    this.setState(null);
   }
 
   toggle() {

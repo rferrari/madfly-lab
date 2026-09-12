@@ -55,6 +55,10 @@
       }
       #keys b { color: #00e5ff; font-weight: 500; }
       #boot b { color: #00e5ff; font-weight: 500; }
+      @keyframes blink {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
+      }
     </style>
   </head>
   <body>
@@ -68,7 +72,8 @@
     </div>
     <div id="keys">
       <b>1-4</b> camera &nbsp; <b>R</b> reset &nbsp; <b>N</b> new fly<br>
-      <b>P</b> poke &nbsp; <b>L</b> lights &nbsp; <b>B</b> brightness &nbsp; <b>C</b> circuit &nbsp; <b>V</b> brain view &nbsp; <b>shift+G</b> genotype &nbsp; <b>H</b> hide HUD
+      <b>P</b> poke &nbsp; <b>L</b> lights &nbsp; <b>F</b> fan &nbsp; <b>B</b> brightness &nbsp; <b>C</b> circuit &nbsp; <b>V</b> brain view &nbsp; <b>shift+G</b> genotype &nbsp; <b>H</b> hide HUD<br>
+      <b>shift+R</b> record &nbsp; <b>shift+P</b> replay &nbsp; <b>shift+V</b> export MP4 &nbsp; <b>shift+J</b> export JSON
     </div>
     <div id="log"></div>
     <script type="module">

@@ -32,7 +32,7 @@ export class LightSwitch extends Station {
       new THREE.BoxGeometry(0.9, 1.3, 0.16),
       new THREE.MeshStandardMaterial({ color: 0x201232, roughness: 0.45, metalness: 0.65 }),
     );
-    plate.position.y = 1.1;
+    plate.position.y = 0.85;
     plate.castShadow = true;
     group.add(plate);
 
@@ -49,11 +49,11 @@ export class LightSwitch extends Station {
         color: 0xffd23d, emissive: 0xffd23d, emissiveIntensity: 1.6, roughness: 0.3,
       }),
     );
-    this.toggleMesh.position.set(0, 1.28, 0.13);
+    this.toggleMesh.position.set(0, 1.0, 0.13);
     group.add(this.toggleMesh);
 
     this.lamp = new THREE.PointLight(0xffd23d, 5, 5, 2);
-    this.lamp.position.set(0, 1.5, 0.5);
+    this.lamp.position.set(0, 1.25, 0.5);
     group.add(this.lamp);
 
     // Clicking the switch is the obvious interaction, so wire it directly.
@@ -67,7 +67,7 @@ export class LightSwitch extends Station {
     this.on = !!on;
     this.lab?.arena.setLights(this.on);
     if (this.toggleMesh) {
-      this.toggleMesh.position.y = this.on ? 1.28 : 0.94;
+      this.toggleMesh.position.y = this.on ? 1.0 : 0.72;
       this.toggleMesh.material.emissiveIntensity = this.on ? 1.6 : 0.12;
       this.toggleMesh.material.color.setHex(this.on ? 0xffd23d : 0x4a3a12);
     }

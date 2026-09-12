@@ -29,6 +29,7 @@ import { ScentField } from './gradients.js';
 import { LabAvatar } from '../avatar/lab-avatar.js';
 import { LabBrain } from '../brain/lab-brain.js';
 import { LabObserver } from '../observer/lab-observer.js';
+import { ScreenRecorder } from '../observer/screen-recorder.js';
 import { resolveGenotype, describeGenotype } from '../avatar/genotype.js';
 import { CIRCUITS } from '../circuits.js';
 
@@ -83,6 +84,9 @@ export class MadFlyLab {
     this._accumulator = 0;
     this._lastFrame = 0;
     this._hooks = { beforeStep: [], afterStep: [], poke: [], bump: [] };
+
+    // Screen recording will be initialized after arena is created
+    this.screenRecorder = null;
   }
 
   /** Drop a station into the lab. Safe before or after `start()`. */
@@ -128,6 +132,9 @@ export class MadFlyLab {
     this.arena.setCameraMode(this.cameraMode);
     this.arena.setBrightness(this.brightness);
 
+    // Initialize screen recorder with arena canvas
+    this.screenRecorder = new ScreenRecorder(this.arena.canvas, { fps: 30 });
+
     await this.brain.init();
 
     this.arena.add(this.avatar.build());
@@ -135,6 +142,7 @@ export class MadFlyLab {
     this.observer?.mount(this);
 
     this._bindPointer();
+    this._bindRecordingKeys();
 
     this.running = true;
     this._lastFrame = performance.now();
@@ -201,6 +209,91 @@ export class MadFlyLab {
 
   stop() { this.running = false; }
 
+  /**
+   * Keyboard bindings for screen recording:
+   * Shift+R: Start/stop recording
+   * Shift+P: Open replay modal (while recording exists)
+   * Shift+V: Export MP4 video
+   * Shift+J: Export JSON telemetry
+   * Shift+C: Clear recording
+   */
+  _bindRecordingKeys() {
+    window.addEventListener('keydown', (e) => {
+      if (e.shiftKey) {
+        const key = e.key.toUpperCase();
+        if (key === 'R') {
+          e.preventDefault();
+          this.toggleRecording();
+        } else if (key === 'P') {
+          e.preventDefault();
+          this.screenRecorder.openReplayModal();
+        } else if (key === 'V') {
+          e.preventDefault();
+          this.screenRecorder.exportVideo();
+        } else if (key === 'J') {
+          e.preventDefault();
+          this.screenRecorder.exportTelemetry();
+        } else if (key === 'C') {
+          e.preventDefault();
+          if (confirm('Clear recording? This cannot be undone.')) {
+            this.screenRecorder.clear();
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Toggle recording on/off
+   */
+  toggleRecording() {
+    if (this.screenRecorder.isRecording) {
+      const summary = this.screenRecorder.stop();
+      console.log(`✅ Recording saved: ${summary.frameCount} frames, ${summary.duration.toFixed(2)}s`);
+      this._showRecordingStatus(`📹 STOPPED · ${summary.frameCount} frames`);
+    } else {
+      this.screenRecorder.start();
+      this._showRecordingStatus('🔴 RECORDING');
+    }
+  }
+
+  /**
+   * Show a temporary status message in the corner
+   */
+  _showRecordingStatus(message) {
+    let status = document.getElementById('recording-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'recording-status';
+      status.style.cssText = `
+        position: fixed; top: 16px; right: 16px; z-index: 20;
+        background: rgba(18, 10, 34, 0.9); border: 2px solid rgba(154, 92, 255, 0.6);
+        color: #00e5ff; font: 11px 'SF Mono', ui-monospace, monospace;
+        padding: 10px 16px; border-radius: 6px; pointer-events: none;
+        animation: pulse 0.5s ease;
+      `;
+      document.body.appendChild(status);
+      // Add animation
+      if (!document.getElementById('recording-pulse-style')) {
+        const style = document.createElement('style');
+        style.id = 'recording-pulse-style';
+        style.textContent = `
+          @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+    status.textContent = message;
+    status.style.animation = 'none';
+    setTimeout(() => {
+      status.style.animation = 'pulse 0.5s ease';
+    }, 10);
+  }
+
   dispose() {
     this.stop();
     this.observer?.dispose();
@@ -244,6 +337,16 @@ export class MadFlyLab {
     this._orientLabels();
     this.arena.render();
     this.observer?.update(this, frameDt);
+
+    // Capture frame for recording
+    if (this.screenRecorder.isRecording) {
+      this.screenRecorder.captureFrame(this);
+    }
+
+    // Update replay if modal is open
+    if (this.screenRecorder.isReplaying) {
+      this.screenRecorder.updatePlayback(frameDt);
+    }
   };
 
   /**

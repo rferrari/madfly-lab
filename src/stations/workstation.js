@@ -19,7 +19,9 @@ export class Workstation extends Screen {
       name: 'Workstation', kickRadius: 2.4, collisionRadius: 1.1,
       label: 'WORKSTATION', sublabel: 'type — the fly sees the screen',
       labelColor: '#00e5ff',
-      screenWidth: 2.4, screenHeight: 1.5, blinkHz: 0, ...opts,
+      screenWidth: 2.4, screenHeight: 1.5, blinkHz: 0,
+      mount: 1.2,  // Raise screen above the desk
+      ...opts,
     });
     this.onKey = opts.onKey ?? null;
     this.text = opts.text ?? '';
@@ -35,14 +37,14 @@ export class Workstation extends Screen {
       new THREE.BoxGeometry(3.2, 0.12, 1.3),
       new THREE.MeshStandardMaterial({ color: 0x1d1030, roughness: 0.6, metalness: 0.4 }),
     );
-    desk.position.set(0, 0.86, 0.75);
+    desk.position.set(0, 0.06, 0.75);
     desk.castShadow = true;
     desk.receiveShadow = true;
     group.add(desk);
 
     // Keyboard: a slab plus a grid of keys, angled slightly toward the user.
     const kb = new THREE.Group();
-    kb.position.set(0, 0.94, 0.95);
+    kb.position.set(0, 0.18, 0.82);
     kb.rotation.x = -0.12;
     const slab = new THREE.Mesh(
       new THREE.BoxGeometry(1.9, 0.06, 0.62),
