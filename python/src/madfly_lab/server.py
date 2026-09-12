@@ -47,6 +47,20 @@ from madfly_lab.connectome import _normalize_weight_matrix, is_normalized, load_
 
 DEFAULT_TICK_HZ = 60.0
 
+# Each session steps the whole graph on its own, so concurrent clients multiply
+# the work. Small on purpose: this is a lab instrument, not a service.
+MAX_SESSIONS = 4
+
+
+def _is_closed(ws) -> bool:
+    """True once the socket is gone. websockets has moved this attribute around
+    between versions, so check what exists rather than assuming."""
+    state = getattr(ws, "state", None)
+    if state is not None:
+        return getattr(state, "name", str(state)).upper() in ("CLOSED", "CLOSING")
+    closed = getattr(ws, "closed", None)
+    return bool(closed) if closed is not None else False
+
 
 class LabSession:
     """One connected client's brain. Activations are per-session; the heavy,
@@ -119,7 +133,24 @@ async def _handle(ws, shared):
     import websockets
 
     session = None
+    shared["sessions"] += 1
+    peer = getattr(ws, "remote_address", None)
+    print(f"  + client connected ({shared['sessions']} active) {peer}", flush=True)
     try:
+        # Refuse rather than silently degrade. Each session runs its own tick
+        # loop over the full graph, so N clients means N times the GPU work --
+        # six abandoned connections from a test harness starved the event loop
+        # badly enough that a new handshake took 13.6 SECONDS to answer, and
+        # `mode: auto` gave up and fell back to a pruned pack with a healthy
+        # server sitting right there.
+        if shared["sessions"] > MAX_SESSIONS:
+            await ws.send(json.dumps({
+                "op": "error",
+                "message": f"server is at its {MAX_SESSIONS}-session limit; "
+                           "close another tab or restart the server.",
+            }))
+            return
+
         raw = await ws.recv()
         hello = json.loads(raw)
         if hello.get("op") != "hello":
@@ -156,7 +187,11 @@ async def _handle(ws, shared):
 
         pump_task = asyncio.create_task(pump())
         try:
-            while not pump_task.done():
+            # `pump_task.done()` alone is not enough: a client that vanishes
+            # without a clean close can leave the pump awaiting forever, and the
+            # tick loop then runs against a dead socket for the life of the
+            # process. Checking the socket state too is what actually reaps it.
+            while not pump_task.done() and not _is_closed(ws):
                 await ws.send(json.dumps(session.tick(dt)))
 
                 ticks_in_window += 1
@@ -182,6 +217,9 @@ async def _handle(ws, shared):
             pump_task.cancel()
     except Exception:
         pass
+    finally:
+        shared["sessions"] -= 1
+        print(f"  - client disconnected ({shared['sessions']} active)", flush=True)
 
 
 def build_shared(cache_dir: str, dataset: str, circuit_name: str,
@@ -269,7 +307,7 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str,
         "adjacency": W, "channels": channels, "n": c.n_sm,
         "soma_b64": soma_b64, "soma_quant": 8192.0,
         "nnz": int(c.sm_adjacency.nnz), "dataset": c.dataset, "source": c.source,
-        "reference": reference, "backend": backend,
+        "reference": reference, "backend": backend, "sessions": 0,
     }
 
 

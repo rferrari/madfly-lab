@@ -87,7 +87,14 @@ lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), {
 // Poking the fly drives real tactile neurons.
 lab.onPoke(() => log('poke: → mechanosensory_tactile (2,558 real cells)'));
 
+// Report real milestones to the splash screen (see index.html).
+const boot = (pct, label) => window.__madflyBoot?.(pct, label);
+boot(12, 'BUILDING ARENA…');
+lab.brain.onReady = () => boot(74, 'CONNECTOME LOADED');
+
+boot(22, `LOADING <b>${(params.get('circuit') ?? 'courtship-and-foraging').toUpperCase()}</b>`);
 await lab.start();
+boot(94, `<b>${lab.brain.nNeurons.toLocaleString()}</b> REAL NEURONS ONLINE`);
 log(`minted ${lab.avatar.identity.name}  ·  seed ${lab.avatar.identity.seed}`);
 
 // ---- controls -------------------------------------------------------------

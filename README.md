@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="madfly_avatar.png" alt="MadFly Lab" width="360">
+<img src="madfly.png" alt="MadFly Lab" width="360">
 
 # 🪰 MadFly Lab
 

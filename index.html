@@ -9,10 +9,38 @@
       #app-canvas { display: block; width: 100vw; height: 100vh; }
       #boot {
         position: fixed; inset: 0; display: grid; place-items: center;
+        background: radial-gradient(ellipse at 50% 42%, #1a0f2e 0%, #0b0614 62%);
         color: #e8e0f5; font: 13px 'SF Mono', ui-monospace, monospace;
-        background: #0b0614; letter-spacing: 0.1em; z-index: 20;
+        letter-spacing: 0.1em; z-index: 20;
+        transition: opacity .45s ease;
       }
+      #boot.fading { opacity: 0; }
       #boot.gone { display: none; }
+      #boot-inner { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+      #boot-art {
+        width: min(300px, 52vw); border-radius: 18px; display: block;
+        box-shadow: 0 0 70px rgba(154,92,255,.34), 0 0 22px rgba(0,229,255,.18);
+        animation: bootpulse 2.6s ease-in-out infinite;
+      }
+      @keyframes bootpulse {
+        0%, 100% { transform: scale(1); filter: saturate(1); }
+        50%      { transform: scale(1.018); filter: saturate(1.12); }
+      }
+      #boot-track {
+        width: min(300px, 52vw); height: 3px; border-radius: 2px;
+        background: rgba(154,92,255,.20); overflow: hidden;
+      }
+      #boot-fill {
+        height: 100%; width: 0%; border-radius: 2px;
+        background: linear-gradient(90deg, #9a5cff, #00e5ff);
+        box-shadow: 0 0 10px rgba(0,229,255,.6);
+        transition: width .3s cubic-bezier(.4,0,.2,1);
+      }
+      #boot-status {
+        color: rgba(232,224,245,.6); font-size: 10.5px; letter-spacing: .14em;
+        min-height: 1.2em; text-align: center;
+      }
+      #boot-status b { color: #00e5ff; font-weight: 500; }
       #log {
         position: fixed; left: 16px; bottom: 16px; z-index: 15;
         color: #e8e0f5; font: 11px 'SF Mono', ui-monospace, monospace;
@@ -31,20 +59,63 @@
   </head>
   <body>
     <canvas id="app-canvas"></canvas>
-    <div id="boot">LOADING <b>REAL CONNECTOME</b> …</div>
+    <div id="boot">
+      <div id="boot-inner">
+        <img id="boot-art" src="./madfly_avatar.png" alt="MadFly Lab" />
+        <div id="boot-track"><div id="boot-fill"></div></div>
+        <div id="boot-status">WAKING THE LAB…</div>
+      </div>
+    </div>
     <div id="keys">
       <b>1-4</b> camera &nbsp; <b>R</b> reset &nbsp; <b>N</b> new fly<br>
       <b>P</b> poke &nbsp; <b>L</b> lights &nbsp; <b>B</b> brightness &nbsp; <b>C</b> circuit &nbsp; <b>V</b> brain view &nbsp; <b>shift+G</b> genotype &nbsp; <b>H</b> hide HUD
     </div>
     <div id="log"></div>
     <script type="module">
+      const boot = document.getElementById('boot');
+      const fill = document.getElementById('boot-fill');
+      const status = document.getElementById('boot-status');
+      const started = performance.now();
+
+      // Minimum time the splash stays up. Loading a pack off localhost is close
+      // to instantaneous, and a screen that flashes for 80ms reads as a glitch
+      // rather than as loading -- so hold it long enough to be seen.
+      const MIN_SPLASH_MS = 1000;
+
+      // Progress is reported by the lab as real milestones (see hello-lab.js);
+      // this only draws it. Unknown-duration steps still move, because a bar
+      // that sits still looks broken even when nothing is wrong.
+      let shown = 0;
+      window.__madflyBoot = (pct, label) => {
+        shown = Math.max(shown, pct);
+        fill.style.width = `${shown}%`;
+        if (label) status.innerHTML = label;
+      };
+
+      const creep = setInterval(() => {
+        if (shown < 88) window.__madflyBoot(shown + 1.5);
+      }, 260);
+
+      const finish = async () => {
+        clearInterval(creep);
+        window.__madflyBoot(100, 'READY');
+        const held = performance.now() - started;
+        if (held < MIN_SPLASH_MS) {
+          await new Promise((r) => setTimeout(r, MIN_SPLASH_MS - held));
+        }
+        boot.classList.add('fading');
+        setTimeout(() => boot.classList.add('gone'), 460);
+      };
+
       import('./examples/hello-lab.js')
-        .then(() => document.getElementById('boot').classList.add('gone'))
+        .then(finish)
         .catch((e) => {
-          document.getElementById('boot').innerHTML =
-            `<div style="max-width:60ch;line-height:1.7">FAILED: ${e.message}<br><br>
-             <span style="color:#9a5cff">If the pack is missing, build it:</span><br>
-             <code>cd python && uv run python scripts/build_pack.py --all \
+          clearInterval(creep);
+          fill.style.background = '#ff3355';
+          boot.innerHTML =
+            `<div style="max-width:62ch;line-height:1.8;padding:24px">FAILED: ${e.message}<br><br>
+             <span style="color:#9a5cff">If a pack is missing, build it:</span><br>
+             <code>cd python &amp;&amp; uv run python scripts/build_pack.py --all \
              --cache-dir ../../fly_simulation/.cache --out-dir ../packs</code></div>`;
           console.error(e);
         });

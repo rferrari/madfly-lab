@@ -93,6 +93,7 @@ export class LabBrain {
     if (this.noise > 0) this.runtime.reset(this.noise);
     this.ready = true;
     console.info(`[MadFlyLab] brain ready - ${this.runtime.describe()}`);
+    this.onReady?.(this);
     return this;
   }
 
