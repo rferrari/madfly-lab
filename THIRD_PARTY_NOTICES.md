@@ -12,15 +12,20 @@ Cambridge, MRC Laboratory of Molecular Biology, and Google Research.
 Every pack carries `license` and `citation` fields in its header, so
 attribution travels with the data rather than only with this repository.
 
-**Deliberately not used:** the FlyWire-derived assets (`circuit.json`,
-`brain_points.json`) in the sibling `duckfly` project, which are CC BY-NC 4.0.
-Sticking to MaleCNS means nothing this framework generates carries a
-non-commercial restriction. Do not introduce FlyWire-derived data without
-flagging the license change.
+**Deliberately not used:** FlyWire-derived connectome assets, which are
+CC BY-NC 4.0. Sticking to MaleCNS means nothing this framework generates
+carries a non-commercial restriction. Do not introduce FlyWire-derived data
+without flagging the license change.
 
 ## Vendored code
 
-### `duckfly` — Apache-2.0
+### `duckfly` — Apache-2.0 — ATTRIBUTION REQUIRED, DO NOT REMOVE
+
+This one is a licence obligation, not a courtesy. duckfly is a third-party
+Apache-2.0 project (original author Anoop; the checkout here is a fork), and
+Apache-2.0 §4(b)/(d) requires retaining attribution in derivative works. The
+two files below are ports of duckfly's own source, not of anything duckfly
+itself vendored.
 
 `src/avatar/retina.js` is ported from duckfly's `shared/vision/retina.js`
 (hexagonal ommatidial map and bilinear frame sampler). `src/avatar/motion.js` is
@@ -29,27 +34,17 @@ radial expansion opponency). Both were generalized off duckfly's fixed 96×64
 radius-15 configuration into constructor parameters, and `retina.js` gained
 precomputed projection taps and `fovForRetina`.
 
-### `fly_speed_dating` / `fly_simulation` — same repo family
+### Earlier in-house simulations — unpublished, same author
 
-`python/src/madfly_lab/connectome.py` is vendored from
-`fly_speed_dating/backend/src/fly_speed_dating_backend/connectome.py`, itself
-vendored from `fly_simulation/connectome.py`. Framework additions are marked
-`# madfly-lab:` in that file: generic cell-type lookup (`indices_of_type`,
-`indices_of_prefix`, `resolve_channel`), induced-subgraph extraction
+`python/src/madfly_lab/connectome.py`, `prune.py` and `brain.py` began as code
+from this author's earlier, unreleased Drosophila simulations. Those are not
+public repositories, so they are not cited by name and nothing here depends on
+them — the files are copies, and this project installs and deploys standalone.
+
+Framework additions to `connectome.py` are marked `# madfly-lab:` in the file
+itself: generic cell-type lookup (`indices_of_type`, `indices_of_prefix`,
+`resolve_channel`, `indices_of_class`), induced-subgraph extraction
 (`subgraph`), and the `is_normalized` guard.
-
-`python/src/madfly_lab/prune.py` generalizes
-`fly_speed_dating/backend/scripts/build_pruned_cache.py` from one hardcoded
-courtship seed set to any circuit.
-
-`python/src/madfly_lab/brain.py` generalizes the `NeuralBridge` lineage running
-in `fly_simulation_3d` → `fly_drone_delivery` → `fly_speed_dating`. The
-`tanh(W·a + I·dt)` dynamics are unchanged; input and readout became
-dictionary-driven so a scene can name its own channels.
-
-Keep vendored files in sync with upstream manually. They are copies, not
-dependencies, so that this project installs and deploys standalone — the same
-reason those projects vendored from each other.
 
 ## Runtime dependencies
 

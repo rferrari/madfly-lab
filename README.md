@@ -129,16 +129,23 @@ drive and motor output.
 
 Each is a real pruned subgraph, built offline from the full connectome.
 
-| Circuit | Neurons | Edges | gzip | For |
-|---|--:|--:|--:|---|
-| `minimal` | 715 | 46k | 84 KB | smoke tests, embedding in non-fly things |
-| `escape-and-steering` | 4,963 | 437k | 1.1 MB | dodge and walk |
-| `dopamine-mushroom-body` | 7,638 | 1.40M | 2.9 MB | reward/punishment learning substrate |
-| `courtship-and-foraging` | 7,922 | 1.38M | 2.9 MB | the default — pheromone, food, escape |
+| Circuit | Neurons | gzip | Adds depth to |
+|---|--:|--:|---|
+| `minimal` | 5,422 | 0.6 MB | nothing — the smallest complete fly |
+| `escape` | 5,833 | 0.8 MB | looming → Giant Fiber |
+| `dopamine` | 6,378 | 0.8 MB | Kenyon cells, MBON, PAM / PPL1 |
+| `courtship` | 6,748 | 0.9 MB | pC1/aSP hub, DNp13, dopamine |
+| `full` | **176,422** | — | everything; runs on the Mode A server |
+
+**Every circuit contains the same sensory and motor core** — two eyes, four
+glomeruli, taste, touch, and the full descending motor set including feeding.
+Circuits differ by what they add depth to, never by what they are missing. A
+circuit missing part of the core produces a fly that cannot function and fails
+silently: the dopamine circuit once had no visual channels at all, so the fly
+stood still with no error anywhere.
 
 ```bash
-cd python
-uv run python scripts/build_pack.py --all --cache-dir ../../fly_simulation/.cache
+make packs CACHE=/path/to/connectome-cache
 ```
 
 Add your own in `python/src/madfly_lab/circuits.py`. The build **fails** if a
@@ -150,15 +157,48 @@ shipping a channel that silently does nothing.
 ## Quick start
 
 ```bash
-npm install
-npm run pack        # build .mflpack files from the real connectome
-npm run dev         # http://localhost:8330
-npm run brain:full  # optional: Mode A server on ws://localhost:8770
-npm test            # 36 tests against real packs
+make setup                       # node + python deps
+make packs CACHE=/path/to/.cache # build packs from the real connectome
+make dev                         # http://localhost:8330
+make brain                       # optional: Mode A server (GPU if present)
+make setup-gpu                   # optional: CUDA for Mode A
+make test                        # 43 tests against real packs
 ```
 
-In the example scene: **1-4** camera modes (chase / orbit / fly's eye /
-top-down), **R** reset, **H** hide the HUD.
+`make` on its own lists every target. `CACHE` points at the directory holding
+`connectome_<dataset>_full.npz` (~80MB); it is not in this repo.
+
+### Controls
+
+| key | |
+|---|---|
+| `1`–`4` | camera: chase / orbit / fly's eye / top-down |
+| `C` | cycle circuit (including `full`, which is Mode A) |
+| `shift+G` | cycle genotype — blind, motion-blind, one-eyed, numb, paralysed… |
+| `N` | mint a new fly (cosmetic) · `R` reset |
+| `P` | poke the fly — or just click it |
+| `L` lights · `B` brightness | kill or raise the lab lighting |
+| `V` · `+` / `-` | brain view (rotate/front/left/right/top) and zoom |
+| `H` | hide the HUD |
+
+### What else is in here
+
+- **Genotypes.** `lab.mintNewFly('blind')`, `{ silence: ['LC4'] }`, and friends.
+  A lesion holds a population's activation at zero while leaving it wired in
+  place — the analogue of a null mutant or an optogenetic silencer, not deleting
+  neurons (which would also remove paths that merely pass through them).
+  Measured: blind → Giant Fiber 0.000; left-eye-only → steering flips sign.
+- **Stations.** `Screen` (a canvas you can draw video or a game into, with a
+  PAM11 payout), `Workstation` (screen + keyboard — type and the fly watches),
+  `FoodBowl`, `Mate` (real cVA pheromone), `HazardFan`, `LightSwitch`,
+  `SlotMachine`. Each carries a floor label naming the real population it drives.
+- **CPU or GPU.** The Mode A server picks with `--device auto` and falls back
+  with a reason. Measured on a GTX 1650: **3.2 ms/step, 309 Hz** over the whole
+  connectome, against 53.9 ms on the CPU — **16.7×**.
+- **Reading channels honestly.** `read()` is raw; `readCalibrated()` divides by
+  a measured per-channel reference; `readSteering()` and `readPhasic()` subtract
+  an adapting baseline. The last two exist because no channel here is ever
+  silent — see below.
 
 ---
 
@@ -242,6 +282,30 @@ and size from a seed. **Cosmetic only** — same connectome, same weights, same
 behaviour. The knob that genuinely differs between runs is `noise`, which seeds
 the network from a different real initial condition, and it is deliberately kept
 separate so the colours never imply a different brain.
+
+### Nothing here is ever silent
+
+Every channel has a nonzero resting level, because all the sensory populations
+are being driven by something. Absolute thresholds are therefore a trap, and it
+caught this project twice:
+
+- `DNa01` rests asymmetric (0.1369 / 0.1530), so a raw left-minus-right curved
+  the fly permanently in one direction.
+- `DNp06` rests around 0.37, so a 0.36 "is it feeding?" gate froze the fly in a
+  permanent meal in an empty arena.
+
+`readSteering()` and `readPhasic()` subtract a slowly-adapting baseline, so a
+behavioural gate asks *"did this go up"* rather than *"is this big"*. Use them
+for anything that drives behaviour.
+
+### What the fly does on its own, and what it doesn't
+
+Walking, turning, escaping and feeding are all driven by real descending
+neurons. **Chemotaxis is not**: the ORN populations in male-cns carry no
+left/right soma annotation (every one is `?`), so there is no bilateral odour
+comparison to read out of the connectome. The avatar casts when the gradient
+falls — klinokinesis, engineered at the body and labelled as such in the code.
+The odour intensity driving it is real.
 
 ### A note on settling
 

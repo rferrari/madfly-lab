@@ -1,8 +1,8 @@
 /**
  * Mode B -- the pruned subgraph running in the browser, on the main thread.
  *
- * Dynamics follow the ones running in fly_simulation_3d, fly_drone_delivery and
- * fly_speed_dating, transliterated from numpy to typed arrays:
+ * Dynamics follow the ones running in this author's earlier, unreleased
+ * simulations, transliterated from numpy to typed arrays:
  *
  *     a <- tanh(W @ a + I)
  *

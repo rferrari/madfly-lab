@@ -157,7 +157,7 @@ real connectome:
 
 ```bash
 cd python
-uv run python scripts/build_pack.py --all --cache-dir ../../fly_simulation/.cache
+uv run python scripts/build_pack.py --all --cache-dir /path/to/connectome-cache
 ```
 
 The `--cache-dir` points at the ~80MB full-connectome `.npz`, which also is not
@@ -214,18 +214,66 @@ Two rules if you touch `device.py`:
 2. **Synchronize before timing.** CuPy launches are asynchronous, so an unsynced
    benchmark measures the launch, not the work.
 
+## Behavioural gates: phasic, never absolute
+
+No channel in this network is ever silent — every sensory population is being
+driven by something, so everything has a nonzero resting level. An absolute
+threshold on a real channel is therefore a bug waiting to happen, and it has
+already happened twice here:
+
+- `DNa01` rests asymmetric (0.1369 / 0.1530), so a raw left-minus-right curved
+  the fly permanently in one direction.
+- `DNp06` rests around 0.37, so a 0.36 "is it feeding?" gate froze the fly in a
+  permanent meal in an empty arena at zero speed.
+
+Use `brain.readSteering()` and `brain.readPhasic()` for anything that drives
+behaviour. Both subtract a slowly-adapting baseline, so the question becomes
+*"did this go up"* rather than *"is this big"*. `readCalibrated()` is right for
+display and for comparing channels; raw `read()` is right when you want the
+honest number and nothing else.
+
+## Genotypes and lesions
+
+`lab.mintNewFly(spec)` builds a fly to order — see `src/avatar/genotype.js`.
+
+A lesion holds a population's activation at zero while leaving it wired in
+place. That is deliberate and it is the whole point: deleting the neurons would
+also delete every path that merely travels THROUGH them, which is a different
+and wrong experiment. Everything downstream then responds to the absence through
+the real connectivity.
+
+`mintFly()` (colours, name, scale) must stay strictly cosmetic. Never let an
+appearance knob change behaviour — a "different fly" that might also think
+differently would be a lie about what this framework does. The knob that
+genuinely varies a run is `noise`, and it is kept separate for that reason.
+
 ## Before you call it done
 
 ```bash
-npm test                      # 36 tests: pack format, dynamics, sensors, stations
-npx vite build                # whole module graph compiles
+make check                    # 43 tests + production build
 ```
+
+Tests cover pack format, dynamics, calibration, sensors and stations — and
+assert that every circuit ships the complete sensory/motor core, so a circuit
+can never again silently produce a fly that cannot move.
 
 Tests run against **real generated packs**, not fixtures. If packs are missing
 the suite skips with a message rather than passing vacuously — a green run that
 tested nothing is worse than a red one. Keep that property.
 
 ---
+
+## Attribution — one hard requirement
+
+`src/avatar/retina.js` and `src/avatar/motion.js` are ports of **duckfly**
+(Apache-2.0, third-party, original author Anoop). Apache-2.0 §4(b)/(d) requires
+retaining that attribution in derivative works, so the duckfly entry in
+THIRD_PARTY_NOTICES.md is a **licence obligation, not a courtesy**. Do not
+remove it while that code is here.
+
+Everything else with a lineage came from this author's own earlier, unreleased
+simulations. Those are private, so they are referred to generically rather than
+by repository name — a public reader cannot follow a link to them anyway.
 
 ## Data provenance
 

@@ -208,7 +208,7 @@ CIRCUITS = {
         # hops=2/top_k=5 measured at 7,922 real neurons / 1.38M real edges --
         # inside the spec's 300-8,600 browser band, and the same order as the
         # 8,598-neuron courtship pack already proven to run in a browser tab in
-        # fly_speed_dating. hops=3 with the default top_k=10 pulls in 23,560
+        # an earlier in-house simulation. hops=3 with top_k=10 pulls in 23,560
         # neurons (13% of the whole brain), which is a 34MB pack: correct, but
         # no longer a browser artifact. Mode A is the right runtime above this.
         hops=1,

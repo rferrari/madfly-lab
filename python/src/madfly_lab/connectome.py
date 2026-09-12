@@ -1,8 +1,8 @@
 """
 connectome.py
 
-Vendored (copied, not a path dependency) from the sibling `fly_speed_dating`
-project -- itself vendored from `fly_simulation` -- so `mad-fly-lab` installs
+Vendored (copied, not a path dependency) from the sibling `an earlier in-house simulation`
+loader -- this author's own earlier, unreleased work -- so `mad-fly-lab` installs
 and deploys standalone. This is the framework's ONE source of real
 per-neuron connectivity; everything else in MadFly Lab (pruning, browser pack
 export, the Mode A server) is built on top of it.
@@ -14,7 +14,7 @@ Framework additions on top of the vendored file (see `# madfly-lab:` markers):
     vendored file only exposed the handful of named pathways its own game
     needed.
   - `ConnectomeData.subgraph()` -- index-remapping induced-subgraph extraction,
-    lifted out of fly_speed_dating's one-off `scripts/build_pruned_cache.py`
+    lifted out of the earlier simulation's one-off `scripts/build_pruned_cache.py`
     and generalized so `prune.py` can build a pack for any seed set.
 
 Keep in sync manually if the upstream connectome.py changes.
@@ -202,7 +202,7 @@ class ConnectomeData:
         # (courtship only: DA1/DA2 -> pC1/aSP -> DNa01/DNp13) -- and pruning the
         # graph down to the courtship-relevant subgraph (see build_pruned_cache.py)
         # deliberately drops DNp03/LPLC1/LPLC2 entirely to save memory on Render's
-        # free tier. So, unlike the original fly_simulation/fly_drone_delivery
+        # free tier. So, unlike the original in-house loader's
         # copy of this file, these are optional here too (None/empty rather than
         # a hard failure), matching FORWARD_TYPE/FEEDING_TYPE's existing pattern.
         motor_l = [i for i in range(self.n_sm) if types[i] == MOTOR_TYPE and sides[i] == "L"]
@@ -348,7 +348,7 @@ class ConnectomeData:
         """Induced subgraph over `keep` (sorted original indices), with every
         real edge between kept neurons preserved at its original weight.
 
-        Generalized from fly_speed_dating's scripts/build_pruned_cache.py, which
+        Generalized from the earlier simulation's scripts/build_pruned_cache.py, which
         did exactly this inline for one hardcoded courtship seed set. The MB and
         olfactory-pathway matrices are carried through untouched: they are
         separate bipartite weight matrices indexed by their OWN populations, not

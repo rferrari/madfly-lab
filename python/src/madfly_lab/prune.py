@@ -1,7 +1,7 @@
 """Generalized connectome pruning: full 176k real graph -> a circuit-sized
 real subgraph small enough to run in a browser tab.
 
-Method (generalized from fly_speed_dating/scripts/build_pruned_cache.py, which
+Method (generalized from an earlier one-off pruning script, which
 hardcoded one courtship seed set): grow outward from the circuit's seed neurons
 along each neuron's top-K strongest outgoing edges, for N hops. Once the node
 set is fixed, the induced subgraph keeps EVERY real edge between kept nodes at

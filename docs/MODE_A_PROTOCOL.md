@@ -3,8 +3,8 @@
 Server: `python/src/madfly_lab/server.py`. Client: `src/brain/remote-runtime.js`.
 
 Python owns the neural state; the browser renders it and never waits for it.
-This is the same thin-client split proven in `fly_drone_delivery` and
-`fly_speed_dating`, with one difference: this server owns **only the brain**.
+This is the same thin-client split proven in earlier in-house simulations, with
+one difference: this server owns **only the brain**.
 Scene state — stations, avatar pose, scoring — stays in the browser, because in
 MadFly Lab the scene is the developer's code and the brain is the framework's.
 
@@ -12,7 +12,7 @@ MadFly Lab the scene is the developer's code and the brain is the framework's.
 npm run brain:full
 # or
 cd python && uv run python -m madfly_lab.server \
-  --cache-dir ../../fly_simulation/.cache --circuit courtship-and-foraging
+  --cache-dir /path/to/connectome-cache --circuit courtship
 ```
 
 ## Client → server

@@ -14,7 +14,7 @@
  *
  * DA1 is the real cVA glomerulus (Or67d) -- an actual pheromone channel, not a
  * food odour relabelled. DA2 is paired with it as a second blend component,
- * which is exactly how fly_speed_dating modelled a "pheromone blend".
+ * which is how an earlier in-house simulation modelled a "pheromone blend".
  *
  * `receptiveness` scales the emission. It is a property of the SOURCE, not a
  * claim about the perceiving fly's state.

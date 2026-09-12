@@ -1,7 +1,7 @@
 """Build a browser `.mflpack` for one named circuit from the real connectome.
 
     uv run python scripts/build_pack.py --circuit escape-and-steering
-    uv run python scripts/build_pack.py --all --cache-dir ../../fly_simulation/.cache
+    uv run python scripts/build_pack.py --all --cache-dir /path/to/connectome-cache
 
 Reads the full male-cns:v1.0 cache (176,422 neurons / 25.7M edges). That cache
 is ~80MB and is NOT vendored into this repo -- point --cache-dir at an existing

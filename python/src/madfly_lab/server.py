@@ -1,7 +1,7 @@
 """Mode A runtime -- the full 176k-neuron connectome behind a WebSocket.
 
-Architecture follows the one already proven in fly_drone_delivery and
-fly_speed_dating: Python owns the neural state, the browser is a thin client.
+Architecture follows the one already proven in this author's earlier, unreleased
+simulations: Python owns the neural state, the browser is a thin client.
 The difference is that this server owns ONLY the brain. Scene state (stations,
 avatar pose, scoring) stays in the browser, because in MadFly Lab the scene is
 the developer's code and the brain is the framework's.
@@ -28,7 +28,7 @@ for the client half):
     {op:"error", message}
 
 Run:
-    uv run python -m madfly_lab.server --cache-dir ../fly_simulation/.cache
+    uv run python -m madfly_lab.server --cache-dir /path/to/connectome-cache
 """
 
 import argparse

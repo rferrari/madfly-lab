@@ -8,9 +8,9 @@
  *
  * The one real difference is time. Reads here are *last known* values from the
  * most recent server tick, not values computed this frame. Inputs are fire-and
- * -forget. That is the same thin-client arrangement fly_drone_delivery and
- * fly_speed_dating both run on: Python owns the neural state, the browser
- * renders it and does not wait for it. `read()` therefore never blocks, and a
+ * -forget. That is the same thin-client arrangement the earlier in-house
+ * simulations ran on: Python owns the neural state, the browser renders it and
+ * does not wait for it. `read()` therefore never blocks, and a
  * scene written against Mode B behaves the same in Mode A modulo one network
  * round-trip of lag.
  */

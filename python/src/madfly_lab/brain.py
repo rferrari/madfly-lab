@@ -1,7 +1,7 @@
 """LabBrain's Python side -- the Mode A (full-connectome) neural runtime.
 
-Generalized from the NeuralBridge lineage running in fly_simulation_3d ->
-fly_drone_delivery -> fly_speed_dating:
+Generalized from the NeuralBridge lineage in this author's earlier, unreleased
+simulations:
 
     a <- tanh(W @ a + I)
 
