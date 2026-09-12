@@ -55,6 +55,7 @@ export class LabBrain {
     this._signals = new Map();
     this._signalState = new Map();
     this._loomState = new Map();
+    this._steerBaseline = new Map();
   }
 
   get mode() { return this.runtime ? this.runtime.mode : this.requestedMode; }
@@ -162,7 +163,11 @@ export class LabBrain {
     return [...(this.runtime?.silencedChannels ?? [])];
   }
 
-  reset(noiseScale = this.noise) { this.runtime?.reset(noiseScale); return this; }
+  reset(noiseScale = this.noise) {
+    this.runtime?.reset(noiseScale);
+    this._steerBaseline.clear();
+    return this;
+  }
 
   // ---- output ----------------------------------------------------------
 
@@ -196,14 +201,63 @@ export class LabBrain {
    */
   readLateral(base) { return this.read(`${base}_L`) - this.read(`${base}_R`); }
 
-  /** Calibrated left-minus-right. What a scene should steer on. */
+  /** Calibrated left-minus-right. Raw difference; see readSteering. */
   readLateralCalibrated(base) {
     return this.readCalibrated(`${base}_L`) - this.readCalibrated(`${base}_R`);
   }
 
+  /**
+   * Directional steering signal from a paired descending neuron, in ~[-1, 1].
+   *
+   * A plain left-minus-right does not work as a control signal, for two
+   * measured reasons:
+   *
+   *  1. THE COMMON MODE SWAMPS IT. With a realistic 10% brightness asymmetry
+   *     (lumL 0.55 / lumR 0.45) the real DNa01 pair reads 0.1466 / 0.1423 --
+   *     a difference of 0.0043 sitting on top of a common mode of ~0.145. At
+   *     turnGain 3.2 that is 0.8 degrees per second. The fly walked in a
+   *     straight line into the wall no matter what it saw.
+   *  2. THE PAIR IS NOT SYMMETRIC AT REST. With both eyes equally lit the real
+   *     cells read 0.1369 / 0.1530 -- a standing -0.056 bias that would curve
+   *     the fly permanently in one direction.
+   *
+   * So: take the RATIO (difference over total), which is scale-free and is the
+   * quantity that actually carries direction, and subtract a slowly-adapting
+   * baseline so the animal's own standing asymmetry cancels out and it steers
+   * on CHANGE. This is the same treatment duckfly applies to its DNa pair, and
+   * the reason it is legitimate is that neither operation invents a signal --
+   * both discard components that carry no directional information.
+   */
+  readSteering(base = 'DNa01', { adaptRate = 0.004 } = {}) {
+    const l = this.readCalibrated(`${base}_L`);
+    const r = this.readCalibrated(`${base}_R`);
+    const ratio = (l - r) / (Math.abs(l) + Math.abs(r) + 1e-9);
+
+    const prev = this._steerBaseline.get(base) ?? ratio;
+    const baseline = prev + (ratio - prev) * adaptRate;
+    this._steerBaseline.set(base, baseline);
+
+    return Math.max(-1, Math.min(1, ratio - baseline));
+  }
+
+  /** Forget adapted steering baselines (on reset / re-mint). */
+  resetSteering() { this._steerBaseline.clear(); return this; }
+
   populationActivity() { return this.runtime ? this.runtime.populationActivity() : 0; }
 
-  channels(kind) { return this.pack ? this.pack.channelNames(kind) : []; }
+  /**
+   * Channel names available in this runtime.
+   *
+   * Mode B reads them from the pack. Mode A has no pack, and returning []
+   * there left the telemetry panel completely blank in the one mode where the
+   * whole brain is running -- the server's `ready` frame carries the list, so
+   * use it. `kind` filtering is pack-only; the server does not distinguish.
+   */
+  channels(kind) {
+    if (this.pack) return this.pack.channelNames(kind);
+    const remote = this.runtime?.info?.channels;
+    return remote ? Object.keys(remote).sort() : [];
+  }
 
   /**
    * Fire `handler` when a channel crosses `threshold` upward (edge-triggered,

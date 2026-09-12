@@ -23,7 +23,7 @@ const VERT = `
   void main() {
     vAct = activation;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = uSize * (1.0 + vAct * 3.0) * (12.0 / -mv.z);
+    gl_PointSize = uSize * (1.0 + vAct * 5.0) * (12.0 / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -32,13 +32,19 @@ const FRAG = `
   varying float vAct;
   uniform vec3 uCold;
   uniform vec3 uHot;
+  uniform float uDensity;
   void main() {
     vec2 d = gl_PointCoord - vec2(0.5);
     float r = dot(d, d);
     if (r > 0.25) discard;
     float a = smoothstep(0.25, 0.0, r);
     vec3 c = mix(uCold, uHot, clamp(vAct, 0.0, 1.0));
-    gl_FragColor = vec4(c, a * (0.16 + clamp(vAct, 0.0, 1.0) * 0.84));
+    // Alpha scaled by uDensity: with 176,422 additively-blended points the
+    // cloud saturates to a solid white blob, so a denser cloud gets fainter
+    // points. Structure over brightness.
+    // Low floor, steep gain: resting anatomy stays a faint scaffold and only
+    // genuinely active neurons light up.
+    gl_FragColor = vec4(c, a * (0.05 + clamp(vAct, 0.0, 1.0) * 0.95) * uDensity);
   }
 `;
 
@@ -82,6 +88,19 @@ export class SomaCloud {
     this.n = pack ? pack.nNeurons : 0;
     this.activation = new Float32Array(this.n);
 
+    // Framing state MUST be initialized before the geometry block below, which
+    // calls fit(). It used to be set afterwards, so fit() ran with `this.fill`
+    // and `this.view` undefined, computed a NaN camera distance, and left the
+    // panel silently blank -- no error, just nothing drawn.
+    // 'front' rather than 'rotate' by default: a fixed anatomical view is what
+    // you actually read a brain in, and the rotating one has to be framed for
+    // its widest extent or it clips as it turns.
+    this.view = 'front';
+    this.fill = 0.70;
+    this.zoomLevel = 1;
+    this.spin = 0;
+    this._angle = { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 };
+
     if (this.n) {
       const geo = new THREE.BufferGeometry();
       // The pack stores soma as (x, y, z) in male-cns axes. Y is swapped so the
@@ -98,7 +117,15 @@ export class SomaCloud {
 
       this.material = new THREE.ShaderMaterial({
         uniforms: {
-          uSize: { value: 2.1 },
+          uSize: { value: this.n > 40000 ? 1.5 : 2.1 },
+        // Additive blending means N overlapping points sum; a dense cloud needs
+        // fainter points or it saturates to a white blob. But there is a floor:
+        // 6000/n gave 0.034 for the full connectome, which rendered as nothing
+        // at all. Clamped so 176k points stay visible AND stay structured.
+        // Tuned against the real 176,422-point cloud: 0.22 saturated it to a
+        // white blob, 0.034 looked invisible (though that test was confounded
+        // by the NaN-camera bug below). ~0.07 at full scale shows structure.
+        uDensity: { value: Math.min(1, Math.max(0.16, 12000 / Math.max(1, this.n))) },
           uCold: { value: new THREE.Color(THEME.violet) },
           uHot: { value: new THREE.Color(THEME.cyan) },
         },
@@ -120,12 +147,6 @@ export class SomaCloud {
       this.extent = axisExtents(pos, this.n, 0.98);
       this.fit();
     }
-    this.spin = 0;
-    this.view = 'rotate';
-    /** Framing tightness, 0..1 of the panel the cloud should span. */
-    this.fill = 0.82;
-    this.zoomLevel = 1;
-    this._angle = { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 };
   }
 
   /**
@@ -144,7 +165,7 @@ export class SomaCloud {
    * `fill` of the frame, honouring the panel's aspect ratio so it fits in BOTH
    * axes rather than just vertically.
    */
-  fit(fill = this.fill) {
+  fit(fill = this.fill ?? 0.70) {
     if (!this.points || !this.extent) return this;
     const { x, y, z } = this.extent;
     // Which extents face the camera depends on the view.
@@ -152,12 +173,17 @@ export class SomaCloud {
     let halfH = y;
     if (this.view === 'left' || this.view === 'right') halfW = z;
     else if (this.view === 'top') halfH = z;
+    else if (this.view === 'rotate') halfW = Math.max(x, z);   // widest as it spins
 
-    const aspect = this.camera.aspect;
+    const aspect = this.camera.aspect || 1;
     const tan = Math.tan((this.camera.fov * Math.PI) / 360);
     const distV = halfH / (fill * tan);
     const distH = halfW / (fill * tan * aspect);
-    this.camera.position.set(0, 0, Math.max(distV, distH, 0.4));
+    let dist = Math.max(distV, distH, 0.4);
+    // Guard: a NaN here silently places the camera nowhere and the panel goes
+    // blank with no error. Seen when `fill` or an extent arrived undefined.
+    if (!Number.isFinite(dist)) dist = 3.2;
+    this.camera.position.set(0, 0, dist);
     this.camera.lookAt(0, 0, 0);
     return this;
   }
@@ -168,14 +194,14 @@ export class SomaCloud {
    */
   zoom(factor) {
     this.zoomLevel = Math.min(6, Math.max(0.25, this.zoomLevel * factor));
-    this.fill = 0.82 * this.zoomLevel;
+    this.fill = 0.70 * this.zoomLevel;
     this.fit();
     return +this.zoomLevel.toFixed(2);
   }
 
   resetZoom() {
     this.zoomLevel = 1;
-    this.fill = 0.82;
+    this.fill = 0.70;
     this.fit();
     return this;
   }
@@ -203,10 +229,30 @@ export class SomaCloud {
   }
 
   /** @param {Float32Array|null} activations live view, or null in Mode A */
+  /**
+   * @param {Float32Array|null} activations live view (Mode B), or null
+   *
+   * Activations are NORMALIZED to the current peak before display. Raw values
+   * run around 1e-5 on the full connectome and 1e-3 on a pack, so feeding them
+   * straight to the shader left every point sitting at its baseline alpha: the
+   * cloud showed the brain's ANATOMY as a uniform white mass and never showed
+   * anything firing. Scaling by the peak is what makes activity visible, and
+   * it is a display convention -- the numbers themselves are unchanged.
+   */
   update(activations, dt, remoteCloud = null) {
     if (!this.points) return;
     if (activations) {
-      for (let i = 0; i < this.n; i++) this.activation[i] = Math.abs(activations[i]);
+      let peak = 0;
+      for (let i = 0; i < this.n; i++) {
+        const v = Math.abs(activations[i]);
+        this.activation[i] = v;
+        if (v > peak) peak = v;
+      }
+      if (peak > 0) {
+        const k = 1 / peak;
+        for (let i = 0; i < this.n; i++) this.activation[i] *= k;
+      }
+      this.peak = peak;
     } else if (remoteCloud) {
       this.activation.fill(0);
       const { idx, act } = remoteCloud;

@@ -77,6 +77,24 @@ _LOOMING = {
 # `indices_of_class` for anyone who wants them.
 _TOUCH = {"touch": {"cls": "mechanosensory_tactile"}}
 
+# Real contact chemosensation (taste), and the feeding decision it drives.
+#
+# This is what makes a fly STOP at food rather than merely walk toward it.
+# Smell (ORN) is a distance sense and drives approach; the decision to stop and
+# eat is gated by taste, which requires contact. Without this channel nothing in
+# the arena could ever tell the fly it had arrived.
+#
+# DNp06 was identified in this lineage by tracing the graph, not assumed: it is
+# the strongest real 2-hop downstream target of `gustatory`-class neurons in
+# male-cns:v1.0 (~480k total synaptic weight through 127 intermediates), and it
+# comes as a clean L/R pair.
+_TASTE = {"taste": {"cls": "gustatory"}}
+_FEEDING = {
+    "DNp06": "DNp06",
+    "DNp06_L": {"type": "DNp06", "side": "L"},
+    "DNp06_R": {"type": "DNp06", "side": "R"},
+}
+
 # Real descending motor neurons. Each is a clean L/R pair in male-cns:v1.0
 # (verified: exact==2 for every one of these), which is why steering can be
 # read as a genuine left-minus-right difference rather than a fabricated one.
@@ -144,7 +162,7 @@ CIRCUITS = {
             "DNp13 (copulation attempt), DNa01 (steering) and DNp09 (forward "
             "walking), with the looming escape pathway kept alive alongside."
         ),
-        inputs={**_ORN, **_LOOMING, **_DOPAMINE, **_TOUCH},
+        inputs={**_ORN, **_LOOMING, **_DOPAMINE, **_TOUCH, **_TASTE},
         outputs={
             **_MOTOR,
             **_DOPAMINE,
@@ -153,13 +171,14 @@ CIRCUITS = {
             "DNp13_R": {"type": "DNp13", "side": "R"},
             "courtship_hub": {"prefix": ("pC1", "aSP")},
             "MBON": "MBON*",
+            **_FEEDING,
         },
         # KC (4,064 real Kenyon cells) is substrate here rather than a declared
         # channel: it is the single largest population in the graph and seeding
         # it costs ~4,000 neurons of pack budget. Scenes that want to address
         # Kenyon cells directly should use the dopamine-mushroom-body circuit,
         # where they are the point. They remain resolvable by name either way.
-        substrate=("CT1", "DNp06", "KC"),
+        substrate=("CT1", "KC"),
         # hops=2/top_k=5 measured at 7,922 real neurons / 1.38M real edges --
         # inside the spec's 300-8,600 browser band, and the same order as the
         # 8,598-neuron courtship pack already proven to run in a browser tab in

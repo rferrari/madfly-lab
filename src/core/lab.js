@@ -231,9 +231,33 @@ export class MadFlyLab {
     if (steps === MAX_CATCHUP_STEPS) this._accumulator = 0;
 
     this.arena.updateCamera(this.avatar);
+    this._orientLabels();
     this.arena.render();
     this.observer?.update(this, frameDt);
   };
+
+  /**
+   * Keep floor labels readable from wherever the camera is.
+   *
+   * A fixed orientation only works from one viewpoint: a label aligned for a
+   * viewer at the arena centre reads mirrored and upside down from anywhere
+   * else, which is what the chase camera saw. The plate stays flat on the
+   * ground; only its spin about Y follows the camera, so the text always runs
+   * left-to-right across the view.
+   *
+   * Derivation: with rotation.x = -PI/2 the plane's local +X maps to world
+   * (cos z, 0, -sin z), and we want that along the camera's right vector
+   * (-fz, 0, fx) -- hence atan2(-fx, -fz).
+   */
+  _orientLabels() {
+    const c = this.arena.camera;
+    const fx = -Math.sin(c.rotation.y) * Math.cos(c.rotation.x);
+    const fz = -Math.cos(c.rotation.y) * Math.cos(c.rotation.x);
+    const spin = Math.atan2(-fx, -fz);
+    for (const station of this.stations) {
+      if (station.labelMesh) station.labelMesh.rotation.set(-Math.PI / 2, 0, spin);
+    }
+  }
 
   _tick(dt, eyePixels, visionFresh = true) {
     this.time += dt;
@@ -333,11 +357,11 @@ export class MadFlyLab {
         station.object3D.rotation.y = Math.atan2(-station.position.x, -station.position.z);
       }
       if (station.labelMesh) {
-        // Label sits just outside the station, pushed radially away from centre.
+        // Just outside the station, pushed radially away from centre. Its spin
+        // is handled per-frame by _orientLabels so it stays readable.
         station.labelMesh.position.set(
           Math.cos(a) * (radius + 2.4), station.labelMesh.position.y, Math.sin(a) * (radius + 2.4),
         );
-        station.labelMesh.rotation.z = -a - Math.PI / 2;
       }
     });
     return this;

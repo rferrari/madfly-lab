@@ -25,6 +25,7 @@ const DEFAULT_TRACES = [
   { channel: 'DNp09', label: 'DNp09 forward', color: CSS.lime },
   { channel: 'DNa01', label: 'DNa01 steer', color: CSS.cyan, signed: true },
   { channel: 'touch', label: 'poke (tactile)', color: CSS.amber },
+  { channel: 'DNp06', label: 'DNp06 feeding', color: CSS.lime },
 ];
 
 export class LabObserver {
@@ -71,33 +72,43 @@ export class LabObserver {
         this.cloudCanvas, lab.brain.pack ?? lab.brain.runtime,
       );
       // View buttons: rotate / front / left / right / top.
+      // Zoom sits top-right, overlaid on the canvas; view buttons run along the
+      // bottom. Keeps the two kinds of control visually separate.
+      panel.style.position = 'relative';
+      const zoomBar = document.createElement('div');
+      zoomBar.style.cssText = 'position:absolute;top:22px;right:10px;display:flex;'
+        + 'flex-direction:column;gap:3px;pointer-events:auto;z-index:2';
+      panel.appendChild(zoomBar);
+
       const bar = document.createElement('div');
       bar.style.cssText = 'display:flex;gap:3px;margin-top:5px;pointer-events:auto';
       this.viewButtons = {};
-      const mkBtn = (text, title, onClick, flex = 1) => {
+      const mkBtn = (parent, text, title, onClick, style = '') => {
         const b = document.createElement('button');
         b.textContent = text;
         b.title = title;
-        b.style.cssText = `flex:${flex};background:transparent;color:${CSS.dim};`
-          + `border:1px solid ${CSS.border};border-radius:3px;font:9px ${CSS.font};`
-          + 'padding:2px 0;cursor:pointer';
+        b.style.cssText = `background:${CSS.panel};color:${CSS.dim};`
+          + `border:1px solid ${CSS.border};border-radius:3px;font:10px ${CSS.font};`
+          + `cursor:pointer;${style}`;
         b.onclick = onClick;
-        bar.appendChild(b);
+        parent.appendChild(b);
         return b;
       };
+      mkBtn(zoomBar, '+', 'zoom in', () => { this.somaCloud?.zoom(1.25); },
+        'width:18px;height:18px;padding:0;line-height:1');
+      mkBtn(zoomBar, '−', 'zoom out', () => { this.somaCloud?.zoom(1 / 1.25); },
+        'width:18px;height:18px;padding:0;line-height:1');
+
       for (const v of ['rotate', 'front', 'left', 'right', 'top']) {
         this.viewButtons[v] = mkBtn(
-          v === 'rotate' ? '↻' : v[0].toUpperCase(), v, () => this.setCloudView(v),
+          bar, v === 'rotate' ? '↻' : v[0].toUpperCase(), v,
+          () => this.setCloudView(v), 'flex:1;padding:2px 0;font-size:9px',
         );
       }
-      mkBtn('−', 'zoom out', () => { this.somaCloud?.zoom(1 / 1.25); }, 0.7);
-      mkBtn('+', 'zoom in', () => { this.somaCloud?.zoom(1.25); }, 0.7);
       panel.appendChild(bar);
-      this._highlightView('rotate');
+      this._highlightView('front');
 
-      this.cloudNote = document.createElement('div');
-      this.cloudNote.style.cssText = `color:${CSS.dim};font-size:9px;margin-top:4px`;
-      panel.appendChild(this.cloudNote);
+
       if (lab.brain.mode === 'full-connectome') lab.brain.runtime.enableCloud(true);
     }
 
@@ -184,14 +195,7 @@ export class LabObserver {
     if (this.somaCloud) {
       this.somaCloud.update(brain.runtime?.activationView?.(), dt, brain.runtime?.cloud);
       this.somaCloud.render();
-      if (this.cloudNote) {
-        // Mean |activation| on a pruned pack sits around 2.5e-4, which renders
-        // as "0.0%" at one decimal. Exponent notation keeps the panel
-        // informative across both runtimes, where the scales differ by ~1e4.
-        const pop = brain.populationActivity();
-        this.cloudNote.textContent = `${brain.nNeurons.toLocaleString()} real neurons · `
-          + `mean |a| ${pop > 0 ? pop.toExponential(2) : '0'}`;
-      }
+
     }
 
     if (this.telemetry) {
@@ -212,12 +216,12 @@ export class LabObserver {
           ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
           : '',
         `<span style="color:${CSS.dim}">neurons</span> ${brain.nNeurons.toLocaleString()}`,
-        brain.mode === 'full-connectome' && brain.runtime?.readings
-          ? `<span style="color:${CSS.dim}">server</span> ${(brain.runtime.info?.deviceDetail ?? '').split(',')[0] || '—'} @ ${(brain.runtime.achievedHz ?? 0).toFixed(0)}Hz`
-          : '',
-        `<span style="color:${CSS.dim}">stations</span> ${lab.stations.length}`,
+
         `<span style="color:${CSS.dim}">speed</span> ${avatar.speed.toFixed(2)} u/s`,
         `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">L ${avatar.sensors.loomL.toFixed(2)} R ${avatar.sensors.loomR.toFixed(2)}</span>`,
+        avatar.feeding
+          ? `<span style="color:${CSS.lime}">FEEDING · DNp06 ${avatar.motor.feeding.toFixed(2)}</span>`
+          : '',
         `<span style="color:${CSS.dim}">poke</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`

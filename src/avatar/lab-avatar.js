@@ -88,10 +88,14 @@ export class LabAvatar {
     retinaRadius = 15,
     retinaSpacing = 2.3,
     // Motor gains: activation -> world units. Arena-scale engineering constants.
-    turnGain = 3.2,
+    // Now that steering is a scale-free ratio in ~[-1,1] rather than a tiny
+    // raw difference, this is the rad/s at full deflection.
+    turnGain = 6.0,
     speedGain = 4.0,
     maxSpeed = 6.0,
     escapeImpulse = 5.0,
+    /** Calibrated DNp06 above which the fly stops to feed. */
+    feedThreshold = 0.5,
     bounds = 38,
     seed = null,
   } = {}) {
@@ -107,6 +111,8 @@ export class LabAvatar {
     this.speedGain = speedGain;
     this.maxSpeed = maxSpeed;
     this.escapeImpulse = escapeImpulse;
+    this.feedThreshold = feedThreshold;
+    this.feeding = false;
 
     this.visionEnabled = vision;
     // One retina and one looming detector PER EYE. The connectome's LC4/LPLC1/
@@ -136,7 +142,7 @@ export class LabAvatar {
     this.sensors = {
       left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0, scent: new Map(),
     };
-    this.motor = { steer: 0, forward: 0, escape: 0 };
+    this.motor = { steer: 0, forward: 0, escape: 0, feeding: 0 };
     this.escapeUntil = 0;
     this.object3D = null;
   }
@@ -292,17 +298,26 @@ export class LabAvatar {
     // identical input. Raw values cannot drive a body; one set of gains could
     // never suit all of them. See LabBrain.readCalibrated.
     //
-    // DNa01: real steering DN, clean L/R pair -> a genuine lateral difference.
-    const steer = brain.readLateralCalibrated('DNa01');
+    // DNa01: real steering DN. Read as a baseline-corrected RATIO, not a raw
+    // difference -- see LabBrain.readSteering for the measurements showing why
+    // the raw difference produced 0.8 degrees per second and a standing bias.
+    const steer = brain.readSteering('DNa01');
     // DNp09: real forward-walking-promoting DN (Bidaye et al. 2020).
     const forward = brain.readCalibrated('DNp09');
     // DNp01: the Giant Fiber. A real escape command neuron -- when it fires the
     // fly does not steer, it leaves.
     const escape = brain.readCalibrated('DNp01');
+    // DNp06: the real feeding-decision descending neuron, found by tracing the
+    // graph as the strongest 2-hop target of gustatory input. When it is
+    // driving, the fly stops walking and feeds. This is what makes it halt at a
+    // food bowl instead of strolling over the top of it.
+    const feeding = brain.readCalibrated('DNp06');
 
     this.motor.steer = steer;
     this.motor.forward = forward;
     this.motor.escape = escape;
+    this.motor.feeding = feeding;
+    this.feeding = feeding > this.feedThreshold;
 
     if (escape > 0.35 && time > this.escapeUntil) {
       this.escapeUntil = time + 0.6;
@@ -310,6 +325,9 @@ export class LabAvatar {
       const away = this.sensors.loomR > this.sensors.loomL ? -1 : 1;
       this.yaw += away * 1.1;
       this.speed = this.escapeImpulse;
+    } else if (this.feeding) {
+      // Feeding suppresses locomotion. Real DNp06 drive, engineered gate.
+      this.speed += (0 - this.speed) * Math.min(1, dt * 6);
     } else {
       this.yaw += steer * this.turnGain * dt;
       const drive = Math.max(0, forward) * this.speedGain;

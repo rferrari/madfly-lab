@@ -36,6 +36,15 @@ export class FoodBowl extends Station {
     this.scentType = scentType;
     this.nutrition = opts.nutrition ?? 1;
     this.consumed = 0;
+    /** Contact radius for taste -- smaller than the scent field on purpose. */
+    this.tasteRadius = opts.tasteRadius ?? 1.4;
+    // Measured: the taste population is 1,428 real cells and setInput splits
+    // drive across them, so a nominal 1.0 barely moves DNp06. Calibrated
+    // against the real pathway -- taste 8 puts DNp06 at 0.499 (right on the
+    // feeding threshold), 12 at 0.673 (a clear stop).
+    this.tasteStrength = opts.tasteStrength ?? 12.0;
+    this._tasting = false;
+    this.onTaste = opts.onTaste ?? null;
     this.color = opts.color ?? THEME.lime;
   }
 
@@ -88,5 +97,22 @@ export class FoodBowl extends Station {
       this.consumed += this.nutrition;
       userHandler?.(distance, station);
     };
+  }
+
+  update(dt, ctx) {
+    super.update(dt, ctx);
+
+    // CONTACT TASTE. Smell is a distance sense and only drives approach; the
+    // decision to stop and eat is gated by gustatory neurons, which need
+    // contact. Driving them while the fly is actually on the bowl is what lets
+    // the real DNp06 feeding pathway fire -- before this, nothing in the arena
+    // could tell the fly it had arrived, so it walked over food and kept going.
+    const d = this.distanceTo(ctx.avatar.position);
+    const onFood = d <= this.tasteRadius;
+    if (onFood !== this._tasting) {
+      this._tasting = onFood;
+      ctx.brain.setInput('taste', onFood ? this.tasteStrength : 0);
+      this.onTaste?.(onFood, this);
+    }
   }
 }
