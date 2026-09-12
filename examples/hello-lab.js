@@ -45,12 +45,18 @@ const screen = lab.addStation(new Station.Screen({
 
 // 2 & 3. Two food bowls on DIFFERENT real glomeruli, so the two smells are
 // genuinely different neuron populations rather than one scalar with two names.
+// Deliberately IDENTICAL except for which real glomerulus they drive, so any
+// preference the fly shows is the connectome's and not the scene's. They used
+// to differ (VA6 radius 9, DM1 radius 7, and DM1 tinted a dimmer cyan), which
+// made the fly look like it liked one food and avoided the other -- it was
+// simply smelling one from further away and seeing it better.
+const FOOD = { scentRadius: 8, color: 0x39ff88 };
 lab.addStation(new Station.FoodBowl({
-  scentType: 'ORN_VA6', scentRadius: 9,
+  ...FOOD, scentType: 'ORN_VA6',
   onKick: () => log('forage: reached the VA6 bowl'),
 }));
 lab.addStation(new Station.FoodBowl({
-  scentType: 'ORN_DM1', scentRadius: 7, color: 0x00e5ff,
+  ...FOOD, scentType: 'ORN_DM1',
   onKick: () => log('forage: reached the DM1 bowl'),
 }));
 

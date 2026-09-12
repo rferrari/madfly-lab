@@ -298,6 +298,26 @@ brain.readLateralCalibrated('DNa01')   // calibrated left − right, for steerin
 `onSignal` thresholds and the telemetry HUD both use the calibrated value, so a
 threshold written once holds across channels, circuits and runtimes.
 
+### If the fly seems to prefer one food, check the scene first
+
+The two food bowls in the example are deliberately identical except for which
+real glomerulus they drive. They did not start that way, and the difference was
+visible as behaviour: one bowl had a 9-unit scent radius against the other's 7,
+and a dimmer tint, so the fly smelled it from further away and saw it better. It
+looked like a preference. It was scene config.
+
+Measured against the real connectome, the two food channels are near-identical
+in what they do to behaviour:
+
+| glomerulus | Δ forward | Δ steer | Δ feeding |
+|---|--:|--:|--:|
+| `ORN_VA6` (63 cells) | +0.0043 | +0.0485 | +0.0045 |
+| `ORN_DM1` (74 cells) | +0.0046 | +0.0725 | +0.0048 |
+
+Both attractive, both roughly equally so. If you want a fly that genuinely
+prefers one odour, that is a real experiment — vary `scentStrength`, or lesion a
+glomerulus — but do it on purpose rather than by accident.
+
 ### Poking the fly
 
 Clicking the fly injects a pulse into 2,558 real `mechanosensory_tactile`
