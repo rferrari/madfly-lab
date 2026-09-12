@@ -205,6 +205,12 @@ make            # list every target
 
 ### What else is in here
 
+- **Spontaneous locomotion.** The fly walks even with nothing to sense, because
+  real flies do — walking is initiated centrally, not gated on vision. Measured,
+  vision supplies essentially all of `DNp09`'s drive (0.428 vs 0.005 for smell),
+  so without this a `blind` fly stood still, which is wrong. It is engineered at
+  the body, and suppressed when the motor pathway is lesioned so `paralysed`
+  still means paralysed.
 - **Genotypes.** `lab.mintNewFly('blind')`, `{ silence: ['LC4'] }`, and friends.
   A lesion holds a population's activation at zero while leaving it wired in
   place — the analogue of a null mutant or an optogenetic silencer, not deleting

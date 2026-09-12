@@ -247,6 +247,26 @@ appearance knob change behaviour — a "different fly" that might also think
 differently would be a lie about what this framework does. The knob that
 genuinely varies a run is `noise`, and it is kept separate for that reason.
 
+## Where engineered behaviour is allowed to live
+
+Two behaviours are NOT read from the connectome, and both are placed at the
+body rather than in the brain, on purpose:
+
+- **Chemotaxis** (klinokinesis). The ORN populations carry no left/right soma
+  annotation, so no bilateral odour comparison exists to read.
+- **Spontaneous locomotion.** Real flies walk in the dark; this graph has no
+  central pattern generator, and vision supplies essentially all of DNp09's
+  drive (0.428 vs 0.005 for smell), so a blind fly would otherwise stand still.
+
+Do not "fix" either by injecting a tonic current into the readout neuron.
+DNp09 is two neurons wide with a tiny calibration reference — a drive of 0.05
+saturates it to 50x — so driving it directly does not compute an answer, it
+SETS one, and every downstream reading becomes meaningless. Engineered
+behaviour belongs after the brain, where it is visible as engineering.
+
+Anything engineered must also respect lesions: spontaneous drive is suppressed
+when DNp09 is silenced, or `paralysed` would still walk.
+
 ## Before you call it done
 
 ```bash

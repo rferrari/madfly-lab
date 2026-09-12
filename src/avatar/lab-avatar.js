@@ -98,6 +98,8 @@ export class LabAvatar {
     /** Rise in DNp06 above its resting level that counts as "this is food". */
     feedThreshold = 0.12,
     /** Klinokinesis: turn when an odour gradient falls. Engineered, see act(). */
+    /** Baseline walking speed with no sensory drive at all. See spontaneousDrive. */
+    spontaneousSpeed = 0.9,
     chemotaxis = true,
     chemotaxisGain = 1.9,
     chemotaxisFloor = 0.02,
@@ -118,6 +120,7 @@ export class LabAvatar {
     this.escapeImpulse = escapeImpulse;
     this.feedThreshold = feedThreshold;
     this.feeding = false;
+    this.spontaneousSpeed = spontaneousSpeed;
     this.chemotaxis = chemotaxis;
     this.chemotaxisGain = chemotaxisGain;
     this.chemotaxisFloor = chemotaxisFloor;
@@ -377,14 +380,14 @@ export class LabAvatar {
       // reached DNp09 (forward) but nothing steered, so a gradient could make
       // it hurry, never aim.
       this.yaw += this.odourTurn * dt;
-      const drive = Math.max(0, forward) * this.speedGain;
+      const drive = this.spontaneousDrive(brain) + Math.max(0, forward) * this.speedGain;
       this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     } else if (this.feeding) {
       // Feeding suppresses locomotion. Real DNp06 drive, engineered gate.
       this.speed += (0 - this.speed) * Math.min(1, dt * 6);
     } else {
       this.yaw += steer * this.turnGain * dt;
-      const drive = Math.max(0, forward) * this.speedGain;
+      const drive = this.spontaneousDrive(brain) + Math.max(0, forward) * this.speedGain;
       this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     }
 
@@ -415,6 +418,31 @@ export class LabAvatar {
           0.25 * this.identity.glow + this.touchDrive * 3.5;
       }
     }
+  }
+
+  /**
+   * Baseline walking speed, independent of what the fly can sense.
+   *
+   * A real fly walks in the dark. Locomotion is not gated on vision -- it is
+   * driven by central circuits that initiate walking without any sensory
+   * prompt. This pruned graph contains no such generator, and measured, vision
+   * supplies essentially all of DNp09's drive: vision alone 0.428, smell alone
+   * 0.005, touch 0.027. So a `blind` fly had no forward command at all and
+   * stood still, which is wrong -- blind flies walk perfectly well.
+   *
+   * This is ENGINEERED, and deliberately placed at the BODY rather than in the
+   * brain. Injecting a tonic current into DNp09 would be circular: it is a
+   * readout, only two neurons wide, and driving it directly sets the answer
+   * instead of computing it (a drive of 0.05 saturates it to 50x reference).
+   *
+   * It is suppressed when the motor pathway is lesioned, so `paralysed` still
+   * means paralysed.
+   */
+  spontaneousDrive(brain) {
+    if (this.spontaneousSpeed <= 0) return 0;
+    const silenced = brain?.runtime?.silencedChannels;
+    if (silenced && (silenced.has('DNp09') || silenced.has('DNp09_L'))) return 0;
+    return this.spontaneousSpeed;
   }
 
   /**
