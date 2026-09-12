@@ -90,6 +90,9 @@ lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), {
 // Poking the fly drives real tactile neurons.
 lab.onPoke(() => log('poke: → mechanosensory_tactile (2,558 real cells)'));
 
+// Walking into something is mechanosensory too -- same real cells as a poke.
+lab.onBump(Triggers.throttle(1.2, (station) => log(`bumped ${station.name} → tactile`)));
+
 // Report real milestones to the splash screen (see index.html).
 const boot = (pct, label) => window.__madflyBoot?.(pct, label);
 boot(12, 'BUILDING ARENA…');

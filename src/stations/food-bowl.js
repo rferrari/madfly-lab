@@ -27,7 +27,7 @@ export class FoodBowl extends Station {
     const glomerulus = scentType.replace('ORN_', '');
     const cellCount = { DM1: 74, VA6: 63, DA1: 204, DA2: 48 }[glomerulus];
     super({
-      name: `Food Bowl (${glomerulus})`, kickRadius: 1.2,
+      name: `Food Bowl (${glomerulus})`, kickRadius: 1.2, collisionRadius: 0.6,
       label: `FOOD · ${glomerulus}`,
       sublabel: `${scentType}${cellCount ? ` · ${cellCount} real neurons` : ''}`,
       labelColor: opts.color ? `#${(opts.color).toString(16).padStart(6, '0')}` : '#39ff88',

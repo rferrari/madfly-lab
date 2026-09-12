@@ -30,6 +30,12 @@ export class Station {
     this.options = opts;
     this.position = new THREE.Vector3(...(opts.position ?? [0, 0, 0]));
     this.kickRadius = opts.kickRadius ?? 1.2;
+    /**
+     * Physical footprint. The fly cannot walk through this; bumping it drives
+     * the real mechanosensory_tactile population, the same cells a poke does.
+     * Set to 0 for something that is not solid (a scent field, a light).
+     */
+    this.collisionRadius = opts.collisionRadius ?? 0.55;
 
     this.lab = null;
     this.object3D = null;

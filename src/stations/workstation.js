@@ -16,7 +16,7 @@ import { THEME, CSS } from '../core/theme.js';
 export class Workstation extends Screen {
   constructor(opts = {}) {
     super({
-      name: 'Workstation', kickRadius: 2.4,
+      name: 'Workstation', kickRadius: 2.4, collisionRadius: 1.1,
       label: 'WORKSTATION', sublabel: 'type — the fly sees the screen',
       labelColor: '#00e5ff',
       screenWidth: 2.4, screenHeight: 1.5, blinkHz: 0, ...opts,

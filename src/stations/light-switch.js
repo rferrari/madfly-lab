@@ -17,7 +17,7 @@ import { THEME } from '../core/theme.js';
 export class LightSwitch extends Station {
   constructor(opts = {}) {
     super({
-      name: 'Light Switch', kickRadius: 1.5,
+      name: 'Light Switch', kickRadius: 1.5, collisionRadius: 0.45,
       label: 'LIGHTS', sublabel: 'kills all visual input',
       labelColor: '#ffd23d', ...opts,
     });

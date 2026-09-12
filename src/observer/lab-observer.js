@@ -230,6 +230,9 @@ export class LabObserver {
         avatar.feeding
           ? `<span style="color:${CSS.lime}">FEEDING · DNp06 ${avatar.motor.feeding.toFixed(2)}</span>`
           : '',
+        avatar.sensors.wind > 0.02
+          ? `<span style="color:${CSS.dim}">wind</span> <span style="color:${CSS.cyan}">${avatar.sensors.wind.toFixed(2)}</span>`
+          : '',
         `<span style="color:${CSS.dim}">poke</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`

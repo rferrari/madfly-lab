@@ -28,7 +28,7 @@ import { THEME, CSS } from '../core/theme.js';
 export class Screen extends Station {
   constructor(opts = {}) {
     super({
-      name: 'Screen', kickRadius: 1.8,
+      name: 'Screen', kickRadius: 1.8, collisionRadius: 0.7,
       label: 'SCREEN', sublabel: 'reward → PAM11 · 15 real dopaminergic neurons',
       labelColor: '#ff2bd6', ...opts,
     });
@@ -39,6 +39,11 @@ export class Screen extends Station {
     this.onDraw = opts.onDraw ?? null;
     this.screenWidth = opts.screenWidth ?? 2.2;
     this.screenHeight = opts.screenHeight ?? 1.4;
+    // Panel CENTRE height. The fly's eye sits at y=0.75 with a ~30 degree
+    // vertical half-field, so anything centred much above ~1.5 leaves its view
+    // as it gets close -- the screen used to sit at 1.7 and disappeared upward
+    // exactly when it should have loomed largest.
+    this.mount = opts.mount ?? 0.85;
     this.views = 0;
     this.payouts = 0;
     this._flash = 0;
@@ -50,11 +55,12 @@ export class Screen extends Station {
     const h = this.screenHeight;
 
     // Stand
+    const postH = Math.max(0.12, this.mount - h / 2);
     const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.16, 1.0, 12),
+      new THREE.CylinderGeometry(0.09, 0.16, postH, 12),
       new THREE.MeshStandardMaterial({ color: 0x241238, roughness: 0.5, metalness: 0.6 }),
     );
-    post.position.y = 0.5;
+    post.position.y = postH / 2;
     post.castShadow = true;
     group.add(post);
 
@@ -71,7 +77,7 @@ export class Screen extends Station {
       new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.1),
       new THREE.MeshStandardMaterial({ color: 0x140a24, roughness: 0.4, metalness: 0.7 }),
     );
-    bezel.position.set(0, 1.0 + h / 2, 0);
+    bezel.position.set(0, this.mount, 0);
     bezel.castShadow = true;
     group.add(bezel);
 
@@ -84,11 +90,11 @@ export class Screen extends Station {
       new THREE.PlaneGeometry(w, h),
       new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
     );
-    this.panel.position.set(0, 1.0 + h / 2, 0.056);
+    this.panel.position.set(0, this.mount, 0.056);
     group.add(this.panel);
 
     this.glow = new THREE.PointLight(THEME.magenta, 6, 9, 2);
-    this.glow.position.set(0, 1.0 + h / 2, 0.7);
+    this.glow.position.set(0, this.mount, 0.7);
     group.add(this.glow);
 
     this._render(0);

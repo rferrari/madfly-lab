@@ -53,6 +53,15 @@ export const SENSOR_REFERENCE_DRIVE = 1.0;
 export const LOOM_DRIVE_GAIN = 6.0;
 
 /**
+ * Airflow gain into Johnston's Organ.
+ *
+ * 335 real JO-C/JO-E antennal neurons share the drive, and wind is the one
+ * modality that reaches the fly before the thing producing it does -- it can
+ * feel a fan it has not seen.
+ */
+export const WIND_DRIVE_GAIN = 6.0;
+
+/**
  * A poke drives the tactile population hard -- it is a startling event.
  *
  * MEASURED, so you know what to expect: a poke at this gain lifts the `touch`
@@ -156,7 +165,7 @@ export class LabAvatar {
     // Last sensed values, exposed for the HUD and for scenes.
     this.sensors = {
       left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0,
-      odour: 0, odourDelta: 0, scent: new Map(),
+      odour: 0, odourDelta: 0, wind: 0, scent: new Map(),
     };
     this.motor = { steer: 0, forward: 0, escape: 0, feeding: 0 };
     this.escapeUntil = 0;
@@ -301,6 +310,13 @@ export class LabAvatar {
     this.olfaction.sample(scent, this.position);
     this.olfaction.drive(brain);
     this.sensors.scent = this.olfaction.intensities;
+
+    // Airflow -> Johnston's Organ (real JO-C/JO-E antennal mechanosensors).
+    // A separate modality from touch and vision, and the only one that reaches
+    // the fly before the thing producing it.
+    const wind = scent.sampleAt('wind', this.position);
+    this.sensors.wind = wind;
+    brain.setInput('wind', wind * SENSOR_REFERENCE_DRIVE * WIND_DRIVE_GAIN);
 
     // Klinokinesis, computed here and applied in act(). See the comment there
     // for why this is engineered rather than read from the connectome.

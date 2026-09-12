@@ -89,6 +89,18 @@ _TOUCH = {"touch": {"cls": "mechanosensory_tactile"}}
 # male-cns:v1.0 (~480k total synaptic weight through 127 intermediates), and it
 # comes as a clean L/R pair.
 _TASTE = {"taste": {"cls": "gustatory"}}
+
+# Real airflow sensing: Johnston's Organ in the antenna.
+#
+# JO-C and JO-E subtypes respond to SUSTAINED antennal deflection -- that is
+# wind. JO-A and JO-B respond to vibration, which is sound, and are deliberately
+# excluded: a fan is a breeze, not a song. 335 real neurons across 14 subtypes,
+# so this is cheap as well as correct.
+#
+# Wind is a genuinely separate modality from vision and touch, and it reaches
+# the fly BEFORE the thing making it does -- which is exactly what makes a
+# hazard fan dangerous to an animal that has not seen it yet.
+_WIND = {"wind": {"prefix": ("JO-C", "JO-E")}}
 _FEEDING = {
     "DNp06": "DNp06",
     "DNp06_L": {"type": "DNp06", "side": "L"},
@@ -137,7 +149,7 @@ _MB = {"KC": "KC*", "MBON": "MBON*"}
 # two eyes, four glomeruli, taste, touch, and the full descending motor set
 # including feeding. Circuits then differ by what they add DEPTH to, not by
 # what they are missing.
-_CORE_INPUTS = {**_LOOMING, **_ORN, **_TOUCH, **_TASTE}
+_CORE_INPUTS = {**_LOOMING, **_ORN, **_TOUCH, **_TASTE, **_WIND}
 _CORE_OUTPUTS = {**_MOTOR, **_FEEDING}
 
 

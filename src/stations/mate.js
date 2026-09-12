@@ -27,7 +27,7 @@ import { THEME } from '../core/theme.js';
 export class Mate extends Station {
   constructor(opts = {}) {
     super({
-      name: 'Mate', kickRadius: 1.6,
+      name: 'Mate', kickRadius: 1.6, collisionRadius: 0.45,
       label: 'MATE · cVA', sublabel: 'ORN_DA1 · 204 real pheromone neurons',
       labelColor: '#ff5edb',
       scentType: 'ORN_DA1',

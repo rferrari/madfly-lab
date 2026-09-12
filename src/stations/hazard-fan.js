@@ -24,7 +24,7 @@ import { THEME } from '../core/theme.js';
 export class HazardFan extends Station {
   constructor(opts = {}) {
     super({
-      name: 'Hazard Fan', kickRadius: 1.4,
+      name: 'Hazard Fan', kickRadius: 1.4, collisionRadius: 0.5,
       label: 'HAZARD FAN', sublabel: 'looming → LC4_L / LC4_R · 202 real neurons',
       labelColor: '#ff3355', ...opts,
     });
@@ -33,16 +33,28 @@ export class HazardFan extends Station {
     this.detectRadius = opts.detectRadius ?? 9;
     this.onLooming = opts.onLooming ?? null;
     this.lastDistance = Infinity;
+    /**
+     * Airflow. A fan blows, and a fly feels that through Johnston's Organ --
+     * 335 real JO-C/JO-E antennal neurons that respond to sustained deflection.
+     * Wind reaches the fly BEFORE the blades do, which is what makes a hazard
+     * dangerous to an animal that has not seen it yet.
+     */
+    this.windRadius = opts.windRadius ?? 8;
+    this.windStrength = opts.windStrength ?? 1.0;
+    this._removeWind = null;
   }
 
   build() {
     const group = new THREE.Group();
 
+    // Rotor centred at fly eye height (0.75): a hazard the fly cannot see as
+    // it closes in cannot loom, and the blades used to sit at 1.5 -- the top
+    // edge of its field at 1.5 units and gone by 1.
     const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.14, 1.5, 12),
+      new THREE.CylinderGeometry(0.1, 0.14, 0.8, 12),
       new THREE.MeshStandardMaterial({ color: 0x2a1638, roughness: 0.6, metalness: 0.5 }),
     );
-    post.position.y = 0.75;
+    post.position.y = 0.4;
     post.castShadow = true;
     group.add(post);
 
@@ -52,7 +64,7 @@ export class HazardFan extends Station {
     // so the motion-opponency detector sees radial expansion. A horizontal
     // rotor is edge-on from ground level and produces almost no expansion.
     this.rotor = new THREE.Group();
-    this.rotor.position.set(0, 1.5, 0.12);
+    this.rotor.position.set(0, 0.85, 0.12);
     const bladeMat = new THREE.MeshStandardMaterial({
       color: THEME.red, emissive: THEME.red, emissiveIntensity: 0.8,
       roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide,
@@ -77,13 +89,33 @@ export class HazardFan extends Station {
       }),
     );
     hub.rotation.x = Math.PI / 2;
-    hub.position.set(0, 1.5, 0.2);
+    hub.position.set(0, 0.85, 0.2);
     group.add(hub);
 
     this.warn = new THREE.PointLight(THEME.red, 6, 8, 2);
-    this.warn.position.y = 1.6;
+    this.warn.position.y = 1.0;
     group.add(this.warn);
     return group;
+  }
+
+  attach(lab) {
+    super.attach(lab);
+    // The lab's spatial field is channel-keyed, so it carries wind as readily
+    // as odour -- same falloff, different modality and different real neurons.
+    if (this.windStrength > 0) {
+      this._removeWind = lab.scent.emit('wind', {
+        position: this.position,
+        radius: this.windRadius,
+        strength: this.windStrength,
+        enabled: this.enabled,
+      });
+    }
+  }
+
+  detach() {
+    this._removeWind?.();
+    this._removeWind = null;
+    super.detach();
   }
 
   update(dt, ctx) {

@@ -61,7 +61,14 @@ sensors and obey real motor neurons.
 | **Two compound eyes**, 721 hex columns each | `LPLC1_L/R`, `LPLC2_L/R` | 68/66, 94/91 |
 | **Looming detector** per eye, motion opponency | `LC4_L/R` | 112 / 90 |
 | **Olfactory receptors**, 4 glomeruli | `ORN_DM1/VA6/DA1/DA2` | 74 / 63 / 204 / 48 |
-| **Touch** — click the fly | `touch` (tactile) | 2,558 |
+| **Touch** — click it, or walk it into something | `touch` (tactile) | 2,558 |
+| **Airflow** — Johnston's Organ | `wind` (JO-C / JO-E) | 335 |
+
+Collisions are sensory: walking into a station drives the same real tactile
+population a deliberate poke does. And the hazard fan *blows* — wind reaches the
+fly through Johnston's Organ from ~7 units away, well before it can see the
+blades. JO-A/JO-B (vibration → sound) are deliberately excluded: a fan is a
+breeze, not a song.
 
 Stations carry floor labels naming the real population each drives, and
 `arrangeInRing()` surrounds the fly rather than scattering stations into one

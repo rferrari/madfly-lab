@@ -34,6 +34,9 @@ import { CIRCUITS } from '../circuits.js';
 
 const MAX_CATCHUP_STEPS = 4;
 
+/** Half-width of the sensor block, for collision resolution. */
+const AVATAR_RADIUS = 0.35;
+
 export class MadFlyLab {
   constructor({
     canvas = '#app-canvas',
@@ -79,7 +82,7 @@ export class MadFlyLab {
     this.running = false;
     this._accumulator = 0;
     this._lastFrame = 0;
-    this._hooks = { beforeStep: [], afterStep: [], poke: [] };
+    this._hooks = { beforeStep: [], afterStep: [], poke: [], bump: [] };
   }
 
   /** Drop a station into the lab. Safe before or after `start()`. */
@@ -244,6 +247,49 @@ export class MadFlyLab {
   };
 
   /**
+   * Stop the fly walking through the furniture, and make the collision a real
+   * sensory event.
+   *
+   * Bumping into something is mechanosensory, so a collision drives the same
+   * 2,558 real `touch` neurons a deliberate poke does -- the fly finds out it
+   * hit something the way an actual fly would, through its own tactile cells,
+   * rather than through a scripted callback.
+   *
+   * Resolution is a push-out along the contact normal plus a speed penalty.
+   * That is engineered, not physics: there is no mass, momentum or restitution
+   * here, and there does not need to be.
+   */
+  _resolveCollisions() {
+    const a = this.avatar;
+    for (const station of this.stations) {
+      if (!station.enabled || !station.collisionRadius) continue;
+      const dx = a.position.x - station.position.x;
+      const dz = a.position.z - station.position.z;
+      const d = Math.hypot(dx, dz);
+      const minD = station.collisionRadius + AVATAR_RADIUS;
+      if (d >= minD || d === 0) continue;
+
+      // Push out along the contact normal.
+      const nx = dx / d;
+      const nz = dz / d;
+      a.position.x = station.position.x + nx * minD;
+      a.position.z = station.position.z + nz * minD;
+
+      // Losing most of its speed is what makes a wall feel like a wall.
+      a.speed *= 0.25;
+
+      // Real tactile drive, scaled by how hard it was going.
+      const force = Math.min(1, 0.35 + a.speed / a.maxSpeed);
+      a.touch(force);
+      station.onBump?.(force, station);
+      this._hooks.bump.forEach((fn) => fn(station, force, this));
+    }
+  }
+
+  /** Called when the fly walks into a station. */
+  onBump(fn) { this._hooks.bump.push(fn); return this; }
+
+  /**
    * Keep floor labels readable from wherever the camera is.
    *
    * A fixed orientation only works from one viewpoint: a label aligned for a
@@ -281,6 +327,7 @@ export class MadFlyLab {
     for (const fn of this._hooks.afterStep) fn(dt, this);
 
     this.avatar.act(this.brain, dt, this.time);
+    this._resolveCollisions();
   }
 
   setCamera(mode) { this.arena.setCameraMode(mode); this.cameraMode = mode; return this; }
