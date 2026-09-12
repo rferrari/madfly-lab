@@ -227,7 +227,7 @@ export class LabObserver {
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`
           : `<span style="color:${CSS.dim}">scent</span> —`,
         `<span style="color:${CSS.dim}">H to hide</span>`,
-      ].join('<br>');
+      ].filter(Boolean).join('<br>');
     }
   }
 
