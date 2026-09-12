@@ -49,7 +49,33 @@ _ORN = {
 # Real visual projection neurons the framework's looming detector drives.
 # LC4 ships as 6 real subtypes in this dataset and LPLC2 as 1, so LC4 is
 # addressed by prefix and LPLC2 exactly -- see indices_of_prefix's docstring.
-_LOOMING = {"LC4": "LC4*", "LPLC2": "LPLC2", "LPLC1": "LPLC1"}
+#
+# These populations DO carry a real somaSide annotation in male-cns:v1.0
+# (LPLC1 68L/66R, LPLC2 94L/91R, LC4 71L/55R), and that bilateral structure is
+# functional, not decorative: driving only the left LPLC2 cells yields a DNa01
+# steering signal of 1.1e-4, driving only the right yields 1.5e-3 -- a 13x
+# asymmetry. Summing both eyes into one channel throws that away and leaves the
+# fly walking in a straight line no matter what it sees. So each eye gets its
+# own channel and the avatar drives them from its own compound eye.
+_LOOMING = {
+    "LC4": "LC4*", "LPLC2": "LPLC2", "LPLC1": "LPLC1",
+    "LC4_L": {"prefix": "LC4", "side": "L"}, "LC4_R": {"prefix": "LC4", "side": "R"},
+    "LPLC2_L": {"type": "LPLC2", "side": "L"}, "LPLC2_R": {"type": "LPLC2", "side": "R"},
+    "LPLC1_L": {"type": "LPLC1", "side": "L"}, "LPLC1_R": {"type": "LPLC1", "side": "R"},
+}
+
+# Real mechanosensory neurons -- what a scene drives when something TOUCHES the
+# fly. These are resolved by NeuPrint `class` rather than by type, because the
+# tactile population is spread across ~40 real SNta* subtypes (SNta02/09 241
+# cells, SNta29 235, SNta37 228, ...) with no single umbrella type name.
+# Present only at scope="full", which is what the packs are built from.
+# Only the tactile class is a declared channel. male-cns also annotates 1,733
+# `mechanosensory` and 1,454 `mechanosensory_proprioceptive` cells, but seeding
+# those adds 3,187 neurons and pushes every pack out of the spec's 300-8,600
+# Mode B band for no scene-facing gain -- a click on the fly is touch, not
+# proprioception. They remain reachable at scope="full" (Mode A) and via
+# `indices_of_class` for anyone who wants them.
+_TOUCH = {"touch": {"cls": "mechanosensory_tactile"}}
 
 # Real descending motor neurons. Each is a clean L/R pair in male-cns:v1.0
 # (verified: exact==2 for every one of these), which is why steering can be
@@ -88,10 +114,15 @@ CIRCUITS = {
             "DNp01 (Giant Fiber), DNp03, DNa01, DNp09. The smallest useful "
             "circuit -- what a scene needs to make a fly dodge and walk."
         ),
-        inputs={**_LOOMING, **_ORN},
+        inputs={**_LOOMING, **_ORN, **_TOUCH},
         outputs=_MOTOR,
         substrate=("CT1",),
-        hops=2,
+        # The 2,558 tactile seeds raise the floor considerably; hops=2/top_k=10
+        # reached 12,453 neurons, well past the Mode B band. Measured at
+        # hops=1/top_k=3: 4,167 neurons -- comfortably in band with the whole
+        # looming-to-escape pathway intact.
+        hops=1,
+        top_k=3,
     ),
     "dopamine-mushroom-body": Circuit(
         name="dopamine-mushroom-body",
@@ -113,7 +144,7 @@ CIRCUITS = {
             "DNp13 (copulation attempt), DNa01 (steering) and DNp09 (forward "
             "walking), with the looming escape pathway kept alive alongside."
         ),
-        inputs={**_ORN, **_LOOMING, **_DOPAMINE},
+        inputs={**_ORN, **_LOOMING, **_DOPAMINE, **_TOUCH},
         outputs={
             **_MOTOR,
             **_DOPAMINE,
@@ -121,17 +152,22 @@ CIRCUITS = {
             "DNp13_L": {"type": "DNp13", "side": "L"},
             "DNp13_R": {"type": "DNp13", "side": "R"},
             "courtship_hub": {"prefix": ("pC1", "aSP")},
-            **_MB,
+            "MBON": "MBON*",
         },
-        substrate=("CT1", "DNp06"),
+        # KC (4,064 real Kenyon cells) is substrate here rather than a declared
+        # channel: it is the single largest population in the graph and seeding
+        # it costs ~4,000 neurons of pack budget. Scenes that want to address
+        # Kenyon cells directly should use the dopamine-mushroom-body circuit,
+        # where they are the point. They remain resolvable by name either way.
+        substrate=("CT1", "DNp06", "KC"),
         # hops=2/top_k=5 measured at 7,922 real neurons / 1.38M real edges --
         # inside the spec's 300-8,600 browser band, and the same order as the
         # 8,598-neuron courtship pack already proven to run in a browser tab in
         # fly_speed_dating. hops=3 with the default top_k=10 pulls in 23,560
         # neurons (13% of the whole brain), which is a 34MB pack: correct, but
         # no longer a browser artifact. Mode A is the right runtime above this.
-        hops=2,
-        top_k=5,
+        hops=1,
+        top_k=3,
     ),
     "minimal": Circuit(
         name="minimal",

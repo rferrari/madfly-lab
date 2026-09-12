@@ -13,12 +13,30 @@
         background: #0b0614; letter-spacing: 0.1em; z-index: 20;
       }
       #boot.gone { display: none; }
+      #log {
+        position: fixed; left: 16px; bottom: 16px; z-index: 15;
+        color: #e8e0f5; font: 11px 'SF Mono', ui-monospace, monospace;
+        background: rgba(18,10,34,.82); border: 1px solid rgba(154,92,255,.35);
+        border-radius: 6px; padding: 7px 11px; opacity: 0;
+        transition: opacity .35s ease; pointer-events: none;
+      }
+      #keys {
+        position: fixed; left: 16px; top: 16px; z-index: 15;
+        color: rgba(232,224,245,.45); font: 10px 'SF Mono', ui-monospace, monospace;
+        line-height: 1.7; pointer-events: none;
+      }
+      #keys b { color: #00e5ff; font-weight: 500; }
       #boot b { color: #00e5ff; font-weight: 500; }
     </style>
   </head>
   <body>
     <canvas id="app-canvas"></canvas>
     <div id="boot">LOADING <b>REAL CONNECTOME</b> …</div>
+    <div id="keys">
+      <b>1-4</b> camera &nbsp; <b>R</b> reset &nbsp; <b>N</b> new fly<br>
+      <b>T</b> touch &nbsp; <b>H</b> hide HUD &nbsp; <b>click the fly</b> to poke it
+    </div>
+    <div id="log"></div>
     <script type="module">
       import('./examples/hello-lab.js')
         .then(() => document.getElementById('boot').classList.add('gone'))

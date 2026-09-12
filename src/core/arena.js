@@ -12,6 +12,18 @@ import { THEME } from './theme.js';
 
 export const CAMERA_MODES = ['orbit', 'chase', 'eye', 'top'];
 
+/**
+ * Outward yaw of each compound eye from the body axis, in radians.
+ *
+ * A real Drosophila eye faces mostly sideways with a modest binocular overlap
+ * in front. With the default retina map spanning about +-34 degrees azimuth,
+ * splaying each eye 40 degrees outward leaves a small frontal overlap and gives
+ * each eye its own lateral field -- enough that an object to one side drives
+ * that side's real LC4/LPLC2 population and barely touches the other's, which
+ * is what makes the connectome's left/right asymmetry produce steering.
+ */
+export const EYE_SPLAY = (40 * Math.PI) / 180;
+
 export class Arena {
   constructor({ canvas, size = 40, eyeResolution = [96, 64], eyeFov = 90 } = {}) {
     this.canvasSelector = canvas;
@@ -51,17 +63,30 @@ export class Arena {
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
     this.camera.position.set(0, this.size * 0.45, this.size * 0.6);
 
-    // The compound eye renders from here into an offscreen target each frame.
-    // Deliberately tiny: 96x64 is already more than the 721-column retina can
-    // use, and reading pixels back is the expensive part of the whole pipeline.
+    // TWO compound eyes, because a fly has two and -- more to the point --
+    // because the connectome's visual populations carry a real somaSide
+    // annotation that the framework must not throw away. Driving only the real
+    // left LPLC2 cells yields a DNa01 steering signal of 1.1e-4; driving only
+    // the right yields 1.5e-3, a 13x asymmetry. Rendering one central view and
+    // summing it into both sides erases exactly that, which is why the fly used
+    // to walk in a straight line regardless of what was in front of it.
+    //
+    // Each eye is yawed outward by EYE_SPLAY, so the two fields overlap in front
+    // (binocular region) and diverge to the sides, as a real fly's do.
     const [ew, eh] = this.eyeResolution;
-    this.eyeCamera = new THREE.PerspectiveCamera(this.eyeFov, ew / eh, 0.05, 500);
-    this.eyeTarget = new THREE.WebGLRenderTarget(ew, eh, {
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      depthBuffer: true,
-    });
-    this.eyePixels = new Uint8Array(ew * eh * 4);
+    this.eyes = ['L', 'R'].map((side) => ({
+      side,
+      camera: new THREE.PerspectiveCamera(this.eyeFov, ew / eh, 0.05, 500),
+      target: new THREE.WebGLRenderTarget(ew, eh, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true,
+      }),
+      pixels: new Uint8Array(ew * eh * 4),
+    }));
+    // Kept as aliases so 'eye' camera mode and anything reading a single eye
+    // still work; the left eye is the canonical one for the first-person view.
+    this.eyeCamera = this.eyes[0].camera;
+    this.eyeTarget = this.eyes[0].target;
+    this.eyePixels = this.eyes[0].pixels;
 
     this._buildLights();
     this._buildFloor();
@@ -72,10 +97,10 @@ export class Arena {
   }
 
   _buildLights() {
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-    this.scene.add(new THREE.HemisphereLight(THEME.violet, THEME.void, 0.55));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    this.scene.add(new THREE.HemisphereLight(THEME.violet, THEME.void, 0.8));
 
-    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
     key.position.set(this.size * 0.5, this.size * 1.2, this.size * 0.4);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -186,25 +211,41 @@ export class Arena {
   }
 
   /**
-   * Render the fly's-eye view offscreen and read it back.
+   * Render both compound eyes offscreen and read them back.
    *
-   * The readback is synchronous and is the single most expensive call in the
-   * frame -- which is why the eye target is 96x64 and why a scene that does not
-   * use vision can turn it off (`MadFlyLab({ vision: false })`).
+   * The two readbacks are synchronous and are the most expensive calls in the
+   * frame -- which is why each eye target is only 96x64, and why a scene that
+   * does not use vision can turn it off (`MadFlyLab({ vision: false })`).
+   *
+   * @returns {{L: Uint8Array, R: Uint8Array}} RGBA frames, one per eye
    */
-  renderEye(avatar) {
-    const eye = this.eyeCamera;
-    eye.position.set(avatar.position.x, avatar.position.y + 0.35, avatar.position.z);
-    eye.rotation.set(0, avatar.yaw, 0, 'YXZ');
+  renderEyes(avatar) {
+    const [ew, eh] = this.eyeResolution;
+    const out = {};
+    for (const eye of this.eyes) {
+      const splay = eye.side === 'L' ? EYE_SPLAY : -EYE_SPLAY;
+      // Eyes sit slightly apart on the head as well as pointing apart; the
+      // offset is small next to the splay but keeps the two views from being
+      // an exact mirror pair, which matters for the motion detectors.
+      const lateral = eye.side === 'L' ? -0.18 : 0.18;
+      eye.camera.position.set(
+        avatar.position.x + Math.cos(avatar.yaw) * lateral,
+        avatar.position.y + 0.35,
+        avatar.position.z - Math.sin(avatar.yaw) * lateral,
+      );
+      eye.camera.rotation.set(0, avatar.yaw + splay, 0, 'YXZ');
 
-    this.renderer.setRenderTarget(this.eyeTarget);
-    this.renderer.render(this.scene, eye);
-    this.renderer.readRenderTargetPixels(
-      this.eyeTarget, 0, 0, this.eyeResolution[0], this.eyeResolution[1], this.eyePixels,
-    );
+      this.renderer.setRenderTarget(eye.target);
+      this.renderer.render(this.scene, eye.camera);
+      this.renderer.readRenderTargetPixels(eye.target, 0, 0, ew, eh, eye.pixels);
+      out[eye.side] = eye.pixels;
+    }
     this.renderer.setRenderTarget(null);
-    return this.eyePixels;
+    return out;
   }
+
+  /** Back-compat single-eye render; returns the left eye's frame. */
+  renderEye(avatar) { return this.renderEyes(avatar).L; }
 
   render() { this.renderer.render(this.scene, this.camera); }
 }

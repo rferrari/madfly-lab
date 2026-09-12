@@ -23,6 +23,7 @@ const DEFAULT_TRACES = [
   { channel: 'PPL1', label: 'PPL1 aversive', color: CSS.red },
   { channel: 'DNp09', label: 'DNp09 forward', color: CSS.lime },
   { channel: 'DNa01', label: 'DNa01 steer', color: CSS.cyan, signed: true },
+  { channel: 'touch', label: 'touch (tactile)', color: CSS.amber },
 ];
 
 export class LabObserver {
@@ -52,10 +53,12 @@ export class LabObserver {
     this.headerBody.style.lineHeight = '1.6';
     this.header.appendChild(this.headerBody);
 
-    if (this.enabledPanels.includes('retina') && lab.avatar.retina) {
-      const panel = this._panel(root, 'RETINAL VISION · R1–R6');
-      this.retinaCanvas = this._canvas(panel, PANEL_W, 150);
-      this.retinaView = new RetinalView(this.retinaCanvas, lab.avatar.retina);
+    if (this.enabledPanels.includes('retina') && lab.avatar.eyes) {
+      const panel = this._panel(root, 'RETINAL VISION · L / R');
+      this.retinaCanvas = this._canvas(panel, PANEL_W, 110);
+      this.retinaView = new RetinalView(this.retinaCanvas, {
+        L: lab.avatar.eyes.L.retina, R: lab.avatar.eyes.R.retina,
+      });
     }
 
     if (this.enabledPanels.includes('cloud')) {
@@ -121,7 +124,12 @@ export class LabObserver {
     if (!this.visible) return;
     const { brain, avatar } = lab;
 
-    this.retinaView?.draw(avatar.retina?.response, { loom: avatar.sensors.loom });
+    if (this.retinaView && avatar.eyes) {
+      this.retinaView.draw(
+        { L: avatar.eyes.L.retina.response, R: avatar.eyes.R.retina.response },
+        { L: avatar.sensors.loomL, R: avatar.sensors.loomR },
+      );
+    }
 
     if (this.somaCloud) {
       this.somaCloud.update(brain.runtime?.activationView?.(), dt, brain.runtime?.cloud);
@@ -150,7 +158,8 @@ export class LabObserver {
         `<span style="color:${CSS.dim}">neurons</span> ${brain.nNeurons.toLocaleString()}`,
         `<span style="color:${CSS.dim}">stations</span> ${lab.stations.length}`,
         `<span style="color:${CSS.dim}">speed</span> ${avatar.speed.toFixed(2)} u/s`,
-        `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">${avatar.sensors.loom.toFixed(2)}</span>`,
+        `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">L ${avatar.sensors.loomL.toFixed(2)} R ${avatar.sensors.loomR.toFixed(2)}</span>`,
+        `<span style="color:${CSS.dim}">touch</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,`<span style="color:${CSS.dim}">click the fly to poke it</span>`,
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`
           : `<span style="color:${CSS.dim}">scent</span> —`,

@@ -58,9 +58,24 @@ sensors and obey real motor neurons.
 
 | Sensor | Drives | Real cells |
 |---|---|---|
-| **Compound eye**, 721 hex columns | `LPLC1` / `LPLC2` | 134 / 185 |
-| **Looming detector**, motion opponency | `LC4` | 202 (6 real subtypes) |
+| **Two compound eyes**, 721 hex columns each | `LPLC1_L/R`, `LPLC2_L/R` | 68/66, 94/91 |
+| **Looming detector** per eye, motion opponency | `LC4_L/R` | 112 / 90 |
 | **Olfactory receptors**, 4 glomeruli | `ORN_DM1/VA6/DA1/DA2` | 74 / 63 / 204 / 48 |
+| **Touch** — click the fly | `touch` (tactile) | 2,558 |
+
+**Two eyes are not decoration.** The visual populations carry a real `somaSide`
+annotation, and it is functional: driving only the left `LPLC2` cells yields a
+`DNa01` steering signal of `1.1e-4`, driving only the right yields `1.5e-3` — a
+13× asymmetry. Summing both eyes into one channel erases it, and the fly walks
+in a straight line no matter what it sees. Giving each eye its own real neurons
+turns a constant `−0.006` bias into a sign-changing `±0.19` steering signal:
+
+| stimulus | steer | result |
+|---|--:|---|
+| bright **left** only | **+0.189** | turns left |
+| bright **right** only | **−0.221** | turns right |
+| brighter left | +0.122 | turns left |
+| brighter right | −0.164 | turns right |
 
 and the loop closes through real descending neurons:
 
@@ -81,10 +96,16 @@ One API, two runtimes. A scene never branches on which one it got.
 | | **Mode B** `pruned-subgraph` | **Mode A** `full-connectome` |
 |---|---|---|
 | Where | this browser tab | Python, over a WebSocket |
-| Size | 715 – 7,922 real neurons | **176,422** real neurons, 25.7M synapses |
-| Speed | **2.7 ms/step**, 60 Hz easily | ~45–55 ms/step, **~20 Hz** |
+| Size | 715 – 7,638 real neurons | **176,422** real neurons, 25.7M synapses |
+| Speed | **~1 ms/step**, 60 Hz easily | ~37 ms/step CPU; GPU optional |
+| Device | CPU (typed arrays) | CPU or **CUDA GPU** — `--device auto` |
 | Latency | zero | one round trip |
 | Needs | a `.mflpack` file | `npm run brain:full` |
+
+Mode A picks its device with `--device auto` (the default): it uses a CUDA GPU
+if one genuinely works and falls back to CPU with the reason printed. `--device
+gpu` makes a GPU mandatory; `--device cpu` forces CPU. GPU support is an
+optional extra — `uv pip install -e "python/[gpu]"`.
 
 `mode: 'auto'` uses Mode A if a server is up and falls back to Mode B if not.
 
@@ -194,6 +215,26 @@ brain.readLateralCalibrated('DNa01')   // calibrated left − right, for steerin
 
 `onSignal` thresholds and the telemetry HUD both use the calibrated value, so a
 threshold written once holds across channels, circuits and runtimes.
+
+### Poking the fly
+
+Clicking the fly injects a pulse into 2,558 real `mechanosensory_tactile`
+neurons. Measured, a poke raises the `touch` channel ~35,000×, lifts whole-
+network activity 13×, and lights **~3,000 extra neurons** in the soma cloud.
+
+What it does *not* do is make the fly jump. In this brain-only connectome,
+tactile input reaches the descending motor neurons ~1000× more weakly than
+vision does — those cells project largely outside this graph. That is real
+anatomy, and turning the gain up until the body lurched would be inventing a
+pathway the data does not show. Watch the brain panel, not the legs.
+
+### Minting a fly
+
+`lab.mintNewFly()` (or **N** in the example) gives the fly a new name, colours
+and size from a seed. **Cosmetic only** — same connectome, same weights, same
+behaviour. The knob that genuinely differs between runs is `noise`, which seeds
+the network from a different real initial condition, and it is deliberately kept
+separate so the colours never imply a different brain.
 
 ### A note on settling
 

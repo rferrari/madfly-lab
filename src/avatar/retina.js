@@ -121,11 +121,43 @@ export class CompoundEye {
   }
 
   /**
+   * Light adaptation -- normalize the current frame against a slow-running mean,
+   * so what reaches the brain is CONTRAST rather than absolute luminance.
+   *
+   * This is not a convenience hack: real Drosophila photoreceptors adapt over
+   * several orders of magnitude of ambient light, which is why a fly works
+   * indoors and in sunlight. It is also load-bearing here. The lab arena is
+   * dark by design, so raw hemifield means came out around 0.02 against a
+   * calibration reference of 1.0 -- the fly was 50x under-driven and crawled at
+   * 0.05 u/s regardless of what was in front of it. Adapting makes the drive
+   * depend on how much brighter a station is than the background, which is the
+   * quantity that actually carries information.
+   *
+   * `floor` keeps a pitch-black frame from dividing by ~0 and manufacturing
+   * contrast out of sensor noise. The result feeds a saturating response curve
+   * (see `hemifields`), not a hard clip, so two eyes never both pin at 1.0.
+   */
+  adapt(response = this.response, { rate = 0.02, floor = 0.02 } = {}) {
+    let sum = 0;
+    for (let i = 0; i < response.length; i++) sum += response[i];
+    const mean = sum / response.length;
+    this.adaptedMean = this.adaptedMean === undefined
+      ? mean
+      : this.adaptedMean + (mean - this.adaptedMean) * rate;
+    this.adaptationLevel = Math.max(this.adaptedMean, floor);
+    return this.adaptationLevel;
+  }
+
+  /**
    * Mean luminance over the left and right visual hemifields. This is what
    * feeds the real LPLC1/LPLC2 left/right channels -- the same left/right
    * split every sibling project in this repo family drives vision with.
+   *
+   * With `adapted`, values are divided by the running adaptation level and
+   * clipped to [0, 1], so 1.0 means "much brighter than this eye's recent
+   * average" rather than "near-white pixel".
    */
-  hemifields(response = this.response) {
+  hemifields(response = this.response, { adapted = false } = {}) {
     let l = 0;
     let lN = 0;
     let r = 0;
@@ -134,6 +166,21 @@ export class CompoundEye {
       if (cell.azimuth < 0) { l += response[cell.index]; lN++; }
       else if (cell.azimuth > 0) { r += response[cell.index]; rN++; }
     }
-    return { left: lN ? l / lN : 0, right: rN ? r / rN : 0 };
+    let left = lN ? l / lN : 0;
+    let right = rN ? r / rN : 0;
+    if (adapted) {
+      const level = this.adaptationLevel ?? this.adapt(response);
+      // Naka-Rushton saturation: v / (v + level). This is the standard
+      // photoreceptor response function, and the reason it is used here rather
+      // than a plain divide-and-clip is concrete: dividing by the adaptation
+      // level and clamping to 1 drove BOTH eyes to exactly 1.0 in the lab's
+      // dark arena, which erased the left/right difference the whole two-eye
+      // design exists to preserve. This curve maps 0 -> 0, level -> 0.5 and
+      // saturates smoothly toward 1 without ever clipping, so the ordering
+      // between the eyes survives at any ambient level.
+      left = left / (left + level);
+      right = right / (right + level);
+    }
+    return { left, right };
   }
 }

@@ -22,6 +22,7 @@
  * frame hitch must not hand the network a huge dt that saturates every neuron.
  */
 
+import * as THREE from 'three';
 import { Arena } from './arena.js';
 import { fovForRetina } from '../avatar/retina.js';
 import { ScentField } from './gradients.js';
@@ -74,7 +75,7 @@ export class MadFlyLab {
     this.running = false;
     this._accumulator = 0;
     this._lastFrame = 0;
-    this._hooks = { beforeStep: [], afterStep: [] };
+    this._hooks = { beforeStep: [], afterStep: [], poke: [] };
   }
 
   /** Drop a station into the lab. Safe before or after `start()`. */
@@ -115,11 +116,64 @@ export class MadFlyLab {
     for (const station of this.stations) this._spawn(station);
     this.observer?.mount(this);
 
+    this._bindPointer();
+
     this.running = true;
     this._lastFrame = performance.now();
     requestAnimationFrame(this._loop);
     return this;
   }
+
+  /**
+   * Click the fly to poke it -- drives the real mechanosensory_tactile
+   * population. Clicking a station fires that station's `onPoke` if it has one.
+   *
+   * Raycasting is done here rather than in Arena because the hit has to be
+   * resolved against the avatar and the station list, which are the lab's
+   * business; Arena only owns the camera the ray is cast from.
+   */
+  _bindPointer() {
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let downAt = null;
+
+    this.arena.canvas.addEventListener('pointerdown', (e) => {
+      downAt = { x: e.clientX, y: e.clientY };
+    });
+    this.arena.canvas.addEventListener('pointerup', (e) => {
+      // Ignore drags -- the same pointer is how the orbit camera is moved.
+      if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) {
+        downAt = null;
+        return;
+      }
+      downAt = null;
+
+      const rect = this.arena.canvas.getBoundingClientRect();
+      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, this.arena.camera);
+
+      const hits = raycaster.intersectObjects(
+        [this.avatar.object3D, ...this.stations.map((s) => s.object3D)].filter(Boolean), true,
+      );
+      if (!hits.length) return;
+
+      // Walk up to whichever top-level object owns the hit mesh.
+      let node = hits[0].object;
+      while (node.parent && node.parent !== this.arena.scene) node = node.parent;
+
+      if (node === this.avatar.object3D) {
+        this.avatar.touch(1);
+        this._hooks.poke.forEach((fn) => fn(this.avatar, this));
+      } else {
+        const station = this.stations.find((st) => st.object3D === node);
+        station?.onPoke?.(hits[0].distance, station);
+      }
+    });
+  }
+
+  /** Called when the player pokes the fly. */
+  onPoke(fn) { this._hooks.poke.push(fn); return this; }
 
   stop() { this.running = false; }
 
@@ -141,7 +195,7 @@ export class MadFlyLab {
     // Vision is the expensive part of the frame; sample it once per rendered
     // frame rather than once per brain tick. The brain then sees the most
     // recent frame across however many fixed steps it catches up on.
-    const eyePixels = this.visionEnabled ? this.arena.renderEye(this.avatar) : null;
+    const eyePixels = this.visionEnabled ? this.arena.renderEyes(this.avatar) : null;
 
     this._accumulator += frameDt;
     let steps = 0;
@@ -175,10 +229,43 @@ export class MadFlyLab {
 
   setCamera(mode) { this.arena.setCameraMode(mode); this.cameraMode = mode; return this; }
 
-  reset() {
+  /**
+   * Reset the run. `remint` gives the fly a new cosmetic identity; `noise`
+   * seeds the network from a different real initial condition.
+   *
+   * Those two are deliberately separate. Re-minting changes only how the fly
+   * LOOKS -- same connectome, same weights, same behaviour. Noise is the part
+   * that genuinely differs between runs. Bundling them would imply the colours
+   * mean something.
+   */
+  reset({ remint = false, seed = null, noise = this.brain.noise } = {}) {
     this.avatar.reset();
-    this.brain.reset();
+    this.brain.reset(noise);
     this.time = 0;
+    this._accumulator = 0;
+    if (remint) this.avatar.remint(seed ?? Date.now().toString(36));
+    for (const station of this.stations) station.elapsed = 0;
+    return this.avatar.identity;
+  }
+
+  /** New cosmetic fly and a fresh run. */
+  mintNewFly(seed = null) { return this.reset({ remint: true, seed }); }
+
+  /**
+   * Arrange stations evenly on a circle around the origin, facing inward.
+   * Stations placed at explicit positions tend to end up in one quadrant, and
+   * the fly walks out of the experiment; a ring keeps it surrounded.
+   */
+  arrangeInRing(radius = 9, { startAngle = 0 } = {}) {
+    const n = this.stations.length;
+    this.stations.forEach((station, i) => {
+      const a = startAngle + (i / n) * Math.PI * 2;
+      station.position.set(Math.cos(a) * radius, station.position.y, Math.sin(a) * radius);
+      if (station.object3D) {
+        station.object3D.position.copy(station.position);
+        station.object3D.rotation.y = -a + Math.PI / 2;
+      }
+    });
     return this;
   }
 }

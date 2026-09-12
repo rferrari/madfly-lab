@@ -30,6 +30,7 @@ import { CompoundEye } from './retina.js';
 import { LoomingDetector } from './motion.js';
 import { OlfactoryReceptors } from './olfaction.js';
 import { THEME } from '../core/theme.js';
+import { mintFly } from './mint.js';
 
 /**
  * Sensor drive corresponding to a fully-saturated sensor (value 1.0).
@@ -50,6 +51,32 @@ export const SENSOR_REFERENCE_DRIVE = 1.0;
  *  push the escape pathway well past what ordinary scenery does. */
 export const LOOM_DRIVE_GAIN = 6.0;
 
+/**
+ * A poke drives the tactile population hard -- it is a startling event.
+ *
+ * MEASURED, so you know what to expect: a poke at this gain lifts the `touch`
+ * channel by ~3.5e4x, raises whole-network activity 13x, and lights ~3,000
+ * additional neurons in the soma cloud. What it does NOT do is make the fly
+ * jump: in this brain-only connectome, tactile input reaches the descending
+ * motor neurons ~1000x more weakly than vision does. That is real anatomy --
+ * those cells project largely to targets outside this graph -- not a tuning
+ * failure, and inflating the gain until the body lurched would be inventing a
+ * pathway the data does not show. Watch the brain, not the legs.
+ */
+export const TOUCH_DRIVE_GAIN = 400.0;
+/**
+ * Pulse duration in simulated seconds.
+ *
+ * The gain is large because this is a TRANSIENT. Calibration references are
+ * measured at steady state after 4 simulated seconds of sustained drive; a
+ * 0.35s pulse never gets close to that, so a drive of 1.0 reads as ~0.002
+ * calibrated and the telemetry trace looks dead. The gain compensates for the
+ * duration, not for any claim about how hard a real fly gets poked.
+ */
+export const TOUCH_DECAY_SECONDS = 0.35;
+/** Per-tick falloff for the HUD readout and the body flash only. */
+export const TOUCH_VISUAL_DECAY = 0.94;
+
 export class LabAvatar {
   constructor({
     position = [0, 0.4, 0],
@@ -65,7 +92,10 @@ export class LabAvatar {
     maxSpeed = 6.0,
     escapeImpulse = 5.0,
     bounds = 38,
+    seed = null,
   } = {}) {
+    // Cosmetic identity only -- see mint.js. Never touches the connectome.
+    this.identity = mintFly(seed ?? Date.now().toString(36));
     this.position = new THREE.Vector3(...position);
     this.velocity = new THREE.Vector3();
     this.yaw = yaw;
@@ -78,64 +108,100 @@ export class LabAvatar {
     this.escapeImpulse = escapeImpulse;
 
     this.visionEnabled = vision;
-    this.retina = vision
-      ? new CompoundEye({
-        radius: retinaRadius, angularSpacing: retinaSpacing,
-        width: eyeResolution[0], height: eyeResolution[1], verticalFov: eyeFov,
-      })
+    // One retina and one looming detector PER EYE. The connectome's LC4/LPLC1/
+    // LPLC2 populations are annotated left and right and respond asymmetrically
+    // (13x, measured), so each eye drives its own real side.
+    const eyeOpts = {
+      radius: retinaRadius, angularSpacing: retinaSpacing,
+      width: eyeResolution[0], height: eyeResolution[1], verticalFov: eyeFov,
+    };
+    this.eyes = vision
+      ? {
+        L: { retina: new CompoundEye(eyeOpts), looming: new LoomingDetector({ width: eyeResolution[0], height: eyeResolution[1] }) },
+        R: { retina: new CompoundEye(eyeOpts), looming: new LoomingDetector({ width: eyeResolution[0], height: eyeResolution[1] }) },
+      }
       : null;
-    this.looming = vision ? new LoomingDetector({ width: eyeResolution[0], height: eyeResolution[1] }) : null;
+    // `retina` remains the left eye, so anything written against the old
+    // single-eye API (and the HUD's fallback path) keeps working.
+    this.retina = vision ? this.eyes.L.retina : null;
+    this.looming = vision ? this.eyes.L.looming : null;
     this.olfaction = new OlfactoryReceptors();
+
+    /** Displayed touch level (HUD + body flash). The neural pulse is separate. */
+    this.touchDrive = 0;
+    this._pendingTouch = 0;
 
     // Last sensed values, exposed for the HUD and for scenes.
     this.sensors = {
-      left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, scent: new Map(),
+      left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0, scent: new Map(),
     };
     this.motor = { steer: 0, forward: 0, escape: 0 };
     this.escapeUntil = 0;
     this.object3D = null;
   }
 
-  /** The sensor-block mesh: a body, two glowing compound eyes, a heading fin. */
+  /** The sensor-block mesh: a body, two glowing compound eyes, a heading fin.
+   *  Colours come from the minted identity (cosmetic only -- see mint.js). */
   build() {
     const group = new THREE.Group();
+    const id = this.identity;
 
-    const body = new THREE.Mesh(
+    this.bodyMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.6, 0.34, 0.9),
       new THREE.MeshStandardMaterial({
         color: 0x1d1033, roughness: 0.4, metalness: 0.6,
-        emissive: THEME.violet, emissiveIntensity: 0.25,
+        emissive: id.body, emissiveIntensity: 0.25 * id.glow,
       }),
     );
-    body.castShadow = true;
-    group.add(body);
+    this.bodyMesh.castShadow = true;
+    group.add(this.bodyMesh);
 
-    // Compound eyes -- amber, as in the lab art. Their emissive intensity is
-    // driven from the retina each frame so you can see the eye "light up".
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: THEME.amber, emissive: THEME.amber, emissiveIntensity: 1.4, roughness: 0.25,
-    });
+    // Compound eyes. Their emissive intensity is driven from each retina every
+    // frame, so the LEFT mesh brightens when the LEFT eye sees something --
+    // making the asymmetry that produces steering visible on the model itself.
     this.eyeMeshes = [-1, 1].map((side) => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), eyeMat.clone());
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.16, 16, 12),
+        new THREE.MeshStandardMaterial({
+          color: id.eye, emissive: id.eye, emissiveIntensity: 1.4, roughness: 0.25,
+        }),
+      );
       eye.position.set(side * 0.2, 0.1, 0.42);
       group.add(eye);
       return eye;
     });
 
-    const fin = new THREE.Mesh(
+    this.fin = new THREE.Mesh(
       new THREE.ConeGeometry(0.1, 0.4, 4),
       new THREE.MeshStandardMaterial({
-        color: THEME.cyan, emissive: THEME.cyan, emissiveIntensity: 0.9,
+        color: id.accent, emissive: id.accent, emissiveIntensity: 0.9,
       }),
     );
-    fin.rotation.x = Math.PI / 2;
-    fin.position.set(0, 0.16, -0.55);
-    group.add(fin);
-    this.fin = fin;
+    this.fin.rotation.x = Math.PI / 2;
+    this.fin.position.set(0, 0.16, -0.55);
+    group.add(this.fin);
 
+    group.scale.setScalar(id.scale);
     group.position.copy(this.position);
     this.object3D = group;
     return group;
+  }
+
+  /** Re-mint the fly's appearance in place. Cosmetic only. */
+  remint(seed = Date.now().toString(36)) {
+    this.identity = mintFly(seed);
+    const id = this.identity;
+    if (!this.object3D) return this.identity;
+    this.bodyMesh.material.emissive.setHex(id.body);
+    this.bodyMesh.material.emissiveIntensity = 0.25 * id.glow;
+    for (const eye of this.eyeMeshes) {
+      eye.material.color.setHex(id.eye);
+      eye.material.emissive.setHex(id.eye);
+    }
+    this.fin.material.color.setHex(id.accent);
+    this.fin.material.emissive.setHex(id.accent);
+    this.object3D.scale.setScalar(id.scale);
+    return this.identity;
   }
 
   /**
@@ -144,32 +210,57 @@ export class LabAvatar {
    */
   sense(brain, { eyePixels, scent, time }) {
     if (this.visionEnabled && eyePixels) {
-      const response = this.retina.sample(eyePixels);
-      const { left, right } = this.retina.hemifields(response);
-      this.sensors.left = left;
-      this.sensors.right = right;
-      // Hemifield means are each in [0,1]; their mean is the eye's overall
-      // luminance, scaled onto the calibration reference so the pack's measured
-      // per-channel responses apply.
-      const luminance = ((left + right) / 2) * SENSOR_REFERENCE_DRIVE;
-      brain.setInput('LPLC1', luminance);
-      brain.setInput('LPLC2', luminance);
+      // eyePixels is {L, R} from Arena.renderEyes; a bare frame (the old
+      // single-eye call) is treated as both eyes seeing the same thing.
+      const frames = eyePixels.L ? eyePixels : { L: eyePixels, R: eyePixels };
+      const perEye = {};
 
-      const loom = this.looming.step(eyePixels, time);
-      this.sensors.loom = loom.loom;
-      this.sensors.loomL = loom.left;
-      this.sensors.loomR = loom.right;
-      // One LC4 channel in the shipped packs (the real LC4 subtypes carry no
-      // usable L/R split here), so the two hemifields are summed into it.
-      brain.setInput('LC4', (loom.left + loom.right) * SENSOR_REFERENCE_DRIVE * LOOM_DRIVE_GAIN);
+      for (const side of ['L', 'R']) {
+        const { retina, looming } = this.eyes[side];
+        const response = retina.sample(frames[side]);
+        // Adapt first, then split: the brain should see contrast against this
+        // eye's own recent average, the way a real photoreceptor does.
+        retina.adapt(response);
+        const hemi = retina.hemifields(response, { adapted: true });
+        const luminance = ((hemi.left + hemi.right) / 2) * SENSOR_REFERENCE_DRIVE;
+        const loom = looming.step(frames[side], time);
+        perEye[side] = { luminance, loom: loom.loom };
+
+        // Each eye drives its OWN real neurons. This is the whole point of
+        // having two: the asymmetry between these two numbers is what the
+        // connectome converts into a DNa01 steering difference.
+        brain.setInput(`LPLC1_${side}`, luminance);
+        brain.setInput(`LPLC2_${side}`, luminance);
+        brain.setInput(`LC4_${side}`, loom.loom * SENSOR_REFERENCE_DRIVE * LOOM_DRIVE_GAIN);
+      }
+
+      this.sensors.left = perEye.L.luminance / SENSOR_REFERENCE_DRIVE;
+      this.sensors.right = perEye.R.luminance / SENSOR_REFERENCE_DRIVE;
+      this.sensors.loomL = perEye.L.loom;
+      this.sensors.loomR = perEye.R.loom;
+      this.sensors.loom = Math.max(perEye.L.loom, perEye.R.loom);
 
       if (this.eyeMeshes) {
-        for (const [i, eye] of this.eyeMeshes.entries()) {
-          const v = i === 0 ? left : right;
-          eye.material.emissiveIntensity = 0.6 + v * 2.2 + this.sensors.loom * 3;
+        for (const [i, mesh] of this.eyeMeshes.entries()) {
+          const e = i === 0 ? perEye.L : perEye.R;
+          mesh.material.emissiveIntensity = 0.6 + (e.luminance / SENSOR_REFERENCE_DRIVE) * 2.2 + e.loom * 3;
         }
       }
     }
+
+    // Touch is a pulse, not a sustained input -- a poke is an event. The pulse
+    // is queued by touch() and fired here so it lands on the same tick as the
+    // other senses. Decay is handled by the runtime, in seconds.
+    if (this._pendingTouch > 0) {
+      brain.injectCurrent(
+        'touch', this._pendingTouch * SENSOR_REFERENCE_DRIVE * TOUCH_DRIVE_GAIN, TOUCH_DECAY_SECONDS,
+      );
+      this._pendingTouch = 0;
+    }
+    // Displayed decay, purely for the HUD's touch readout and the body flash.
+    this.touchDrive *= TOUCH_VISUAL_DECAY;
+    if (this.touchDrive < 0.001) this.touchDrive = 0;
+    this.sensors.touch = this.touchDrive;
 
     this.olfaction.sample(scent, this.position);
     this.olfaction.drive(brain);
@@ -233,7 +324,24 @@ export class LabAvatar {
       // A small roll into turns -- cosmetic, but it makes steering legible.
       this.object3D.rotation.z = -steer * 0.5;
       if (this.fin) this.fin.material.emissiveIntensity = 0.4 + Math.abs(forward) * 2;
+      if (this.bodyMesh) {
+        this.bodyMesh.material.emissiveIntensity =
+          0.25 * this.identity.glow + this.touchDrive * 3.5;
+      }
     }
+  }
+
+  /**
+   * Poke the fly. Drives the real mechanosensory_tactile population, which then
+   * propagates through whatever that population is really wired to.
+   *
+   * @param {number} strength 0..1
+   */
+  touch(strength = 1) {
+    const s = Math.min(1, Math.max(0, strength));
+    this._pendingTouch = Math.max(this._pendingTouch, s);
+    this.touchDrive = Math.max(this.touchDrive, s);
+    return this;
   }
 
   reset(position = [0, 0.4, 0], yaw = 0) {
@@ -241,7 +349,9 @@ export class LabAvatar {
     this.yaw = yaw;
     this.speed = 0;
     this.velocity.set(0, 0, 0);
-    this.looming?.reset();
+    if (this.eyes) for (const side of ['L', 'R']) this.eyes[side].looming.reset();
+    this.touchDrive = 0;
+    this._pendingTouch = 0;
     this.escapeUntil = 0;
   }
 }

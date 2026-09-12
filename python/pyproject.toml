@@ -16,6 +16,25 @@ dependencies = [
 # existing .npz cache (the normal path) does not require this.
 neuprint = ["neuprint-python>=0.4.26"]
 
+# GPU acceleration for the Mode A runtime (device="auto"/"gpu").
+#
+#     uv pip install -e ".[gpu]"
+#
+# Entirely optional: without it, device="auto" falls back to CPU and says why.
+# The cupy-cuda12x wheel does NOT pull its own CUDA libraries, so they are
+# listed explicitly -- installing cupy alone yields an install that imports
+# fine, passes a dense probe, and then throws ImportError on libcusparse the
+# moment a sparse matrix is built. Only an NVIDIA driver is needed on the host;
+# these wheels carry the rest of the CUDA runtime.
+gpu = [
+    "cupy-cuda12x>=13.0",
+    "nvidia-cusparse-cu12",   # the sparse mat-vec this runtime lives on
+    "nvidia-cublas-cu12",
+    "nvidia-nvjitlink-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+]
+
 [project.scripts]
 madfly-build-pack = "madfly_lab.cli:build_pack_main"
 madfly-server = "madfly_lab.server:main"

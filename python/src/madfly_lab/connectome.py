@@ -312,8 +312,13 @@ class ConnectomeData:
     def resolve_channel(self, spec) -> np.ndarray:
         """Resolve one channel spec to neuron indices.
 
-        A spec is either "PAM11" (exact type), "LC4*" (prefix family), or a
-        dict {"type"/"prefix": ..., "side": "L"|"R"} for a one-sided readout.
+        A spec is "PAM11" (exact type), "LC4*" (prefix family), or a dict
+        {"type"/"prefix"/"cls": ..., "side": "L"|"R"}.
+
+        The "cls" form resolves by NeuPrint's `class` annotation rather than by
+        cell type -- needed for sensory populations like the ~2,558 tactile
+        neurons, which are spread across ~40 real SNta* subtypes with no single
+        umbrella type name. Only populated at scope="full".
         """
         if isinstance(spec, str):
             return (
@@ -321,9 +326,23 @@ class ConnectomeData:
                 else self.indices_of_type(spec)
             )
         side = spec.get("side")
+        if "cls" in spec:
+            return self.indices_of_class(spec["cls"], side=side)
         if "prefix" in spec:
             return self.indices_of_prefix(spec["prefix"], side=side)
         return self.indices_of_type(spec["type"], side=side)
+
+    def indices_of_class(self, class_name: str, side: str | None = None) -> np.ndarray:
+        """Match on the real NeuPrint `class` annotation, e.g.
+        "mechanosensory_tactile", "gustatory", "visual"."""
+        sides = self.sm_sides
+        return np.array(
+            [
+                i for i in range(self.n_sm)
+                if self.sm_class[i] == class_name and (side is None or str(sides[i]) == side)
+            ],
+            dtype=np.int64,
+        )
 
     def subgraph(self, keep: np.ndarray) -> "ConnectomeData":
         """Induced subgraph over `keep` (sorted original indices), with every

@@ -35,14 +35,15 @@
 export { MadFlyLab } from './core/lab.js';
 export { Station, Triggers } from './core/station.js';
 export { ScentField } from './core/gradients.js';
-export { Arena, CAMERA_MODES } from './core/arena.js';
+export { Arena, CAMERA_MODES, EYE_SPLAY } from './core/arena.js';
 export { THEME, CSS } from './core/theme.js';
 
 export { LabAvatar } from './avatar/lab-avatar.js';
+export { mintFly } from './avatar/mint.js';
 export { CompoundEye, fovForRetina } from './avatar/retina.js';
 export { LoomingDetector } from './avatar/motion.js';
 export { OlfactoryReceptors, OLFACTORY_CHANNELS } from './avatar/olfaction.js';
-export { SENSOR_REFERENCE_DRIVE, LOOM_DRIVE_GAIN } from './avatar/lab-avatar.js';
+export { SENSOR_REFERENCE_DRIVE, LOOM_DRIVE_GAIN, TOUCH_DRIVE_GAIN } from './avatar/lab-avatar.js';
 
 export { LabBrain, HZ_PER_ACTIVATION } from './brain/lab-brain.js';
 export { PrunedRuntime } from './brain/pruned-runtime.js';

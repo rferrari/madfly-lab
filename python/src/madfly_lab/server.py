@@ -40,6 +40,7 @@ import time
 import numpy as np
 
 from madfly_lab import calibrate, circuits
+from madfly_lab.device import select as select_device
 from madfly_lab.brain import LabBrainRuntime
 from madfly_lab.connectome import _normalize_weight_matrix, is_normalized, load_or_build_connectome
 
@@ -54,7 +55,9 @@ class LabSession:
 
     def __init__(self, shared, tick_hz: float):
         self.shared = shared
-        self.runtime = LabBrainRuntime(shared["adjacency"], shared["channels"])
+        self.runtime = LabBrainRuntime(
+            shared["adjacency"], shared["channels"], backend=shared["backend"],
+        )
         self.tick_hz = tick_hz
         self.subscribed = list(shared["channels"].keys())
         self.cloud = False
@@ -126,6 +129,8 @@ async def _handle(ws, shared):
         await ws.send(json.dumps({
             "op": "ready",
             "mode": "full-connectome",
+            "device": shared["backend"].name,
+            "deviceDetail": shared["backend"].detail,
             "nNeurons": shared["n"],
             "nEdges": shared["nnz"],
             "dataset": shared["dataset"],
@@ -176,7 +181,8 @@ async def _handle(ws, shared):
         pass
 
 
-def build_shared(cache_dir: str, dataset: str, circuit_name: str) -> dict:
+def build_shared(cache_dir: str, dataset: str, circuit_name: str,
+                 device: str = "auto") -> dict:
     print(f"Loading FULL connectome ({dataset}) from {cache_dir} ...")
     c = load_or_build_connectome(
         token=os.environ.get("NEUPRINT_TOKEN"),
@@ -196,6 +202,11 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str) -> dict:
     # is a no-op check. Re-normalizing an already-normalized matrix would leave
     # Mode A running different dynamics from the Mode B packs -- see
     # connectome.is_normalized for the numbers.
+    # Device selection happens before anything heavy, so a GPU that will not
+    # work is reported now rather than after a minute of setup. "auto" prefers
+    # the GPU and falls back to CPU with the reason printed; see device.py.
+    backend = select_device(device, adjacency=c.sm_adjacency)
+
     print("  checking adjacency normalization...")
     if is_normalized(c.sm_adjacency):
         print("  already normalized (spectral radius <= 0.9, diagonal -0.2); using as-is.")
@@ -205,16 +216,20 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str) -> dict:
         W = _normalize_weight_matrix(c.sm_adjacency)
     # Tell the operator up front what this machine can actually sustain, rather
     # than letting them discover it as silent lag in a scene.
-    probe = LabBrainRuntime(W, channels)
+    probe = LabBrainRuntime(W, channels, backend=backend)
     probe.reset(noise_scale=0.01)
+    probe.step(1 / 60)                 # warm-up: CuPy's first call compiles/allocates
+    backend.sync()
     t0 = time.perf_counter()
     for _ in range(5):
         probe.step(1 / 60)
-    per_step = (time.perf_counter() - t0) / 5
-    print(f"  step cost: {per_step * 1000:.1f} ms -> max ~{1 / per_step:.0f} Hz on this host "
-          f"(dtype={probe.dtype}).")
+    backend.sync()                     # CuPy launches are async -- an unsynced
+    per_step = (time.perf_counter() - t0) / 5   # timing measures only the launch
+    print(f"  step cost: {per_step * 1000:.1f} ms -> max ~{1 / per_step:.0f} Hz "
+          f"on {backend.name.upper()} (dtype={probe.dtype}).")
     if per_step > 1 / 30:
-        print("  NOTE: below 30 Hz. Scenes needing a faster brain should use a Mode B pack.")
+        print("  NOTE: below 30 Hz. Scenes needing a faster brain should use a Mode B pack"
+              + ("." if backend.is_gpu else ", or install the GPU extra: uv pip install -e '.[gpu]'."))
 
     # Same measurement the packs ship, run against the FULL graph. Without it a
     # calibrated read means nothing in Mode A -- and raw activations here are
@@ -223,14 +238,15 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str) -> dict:
     # what makes one scene's thresholds work in both runtimes.
     print("  calibrating per-channel response over the full graph...")
     reference = calibrate.measure(
-        W, channels, list(circuit.inputs), list(circuit.outputs), strict=False,
+        W, channels, list(circuit.inputs), list(circuit.outputs),
+        strict=False, backend=backend,
     )
     print(calibrate.report(reference))
     print("  ready.")
     return {
         "adjacency": W, "channels": channels, "n": c.n_sm,
         "nnz": int(c.sm_adjacency.nnz), "dataset": c.dataset, "source": c.source,
-        "reference": reference,
+        "reference": reference, "backend": backend,
     }
 
 
@@ -245,9 +261,12 @@ def main() -> int:
     ap.add_argument("--dataset", default="male-cns:v1.0")
     ap.add_argument("--circuit", default="courtship-and-foraging",
                     help="which channel set to expose; the GRAPH is always full")
+    ap.add_argument("--device", default="auto", choices=("auto", "gpu", "cpu"),
+                    help="auto (default): use the GPU if one works, else CPU. "
+                         "gpu: require a GPU, fail loudly if absent. cpu: force CPU.")
     args = ap.parse_args()
 
-    shared = build_shared(args.cache_dir, args.dataset, args.circuit)
+    shared = build_shared(args.cache_dir, args.dataset, args.circuit, args.device)
 
     async def run():
         async with websockets.serve(lambda ws: _handle(ws, shared), args.host, args.port,

@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import scipy.sparse as sp
 
+from madfly_lab.device import Backend, cpu_backend
+
 
 @dataclass
 class LabBrainRuntime:
@@ -43,21 +45,35 @@ class LabBrainRuntime:
     `adjacency` must already be stability-normalized (connectome._normalize_
     weight_matrix / prune.normalized_adjacency). `channels` maps a scene-facing
     name to that channel's neuron indices in this graph.
+
+    Runs on CPU (numpy/scipy) or GPU (cupy) -- see device.py. The dynamics are
+    written once against `self.backend.xp`, since cupy's sparse matrices are
+    API-compatible with scipy's, so there is no second code path to keep in
+    sync. Channel indices stay on the host: they are only used to build the
+    input vector and to gather readouts, and shuttling them per tick would cost
+    more than it saves.
     """
 
     adjacency: sp.csr_matrix
     channels: dict
-    activations: np.ndarray = field(init=False)
-    _external: np.ndarray = field(init=False)
+    backend: Backend = None
+    activations: object = field(init=False)
+    _external: object = field(init=False)
     _decay: dict = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.backend is None:
+            self.backend = cpu_backend()
+        self.adjacency = self.backend.to_device(self.adjacency)
         # Activations MUST share the adjacency's dtype. scipy upcasts a float32
         # matrix times a float64 vector on every call, and on the full 25.7M-edge
         # graph that mismatch costs 180ms per step instead of 37ms -- a 4.8x
         # penalty that silently caps the Mode A server at ~5Hz. Measured, not
         # guessed; see the dtype benchmark in the build notes.
         self.dtype = self.adjacency.dtype if self.adjacency.dtype.kind == "f" else np.float32
+        # Channel index arrays must live on the same device as the activations,
+        # or cupy refuses the fancy-index gather in read()/set_input().
+        self._dev_channels = {k: self.backend.to_device(v) for k, v in self.channels.items()}
         self.reset()
 
     @property
@@ -69,12 +85,14 @@ class LabBrainRuntime:
         weight matrix -- just a different real initial condition, so repeated
         runs of a scene aren't bit-identical.
         """
+        xp = self.backend.xp
         if noise_scale > 0.0:
             rng = rng or np.random.default_rng()
-            self.activations = rng.uniform(-noise_scale, noise_scale, size=self.n).astype(self.dtype)
+            host = rng.uniform(-noise_scale, noise_scale, size=self.n).astype(self.dtype)
+            self.activations = xp.asarray(host)
         else:
-            self.activations = np.zeros(self.n, dtype=self.dtype)
-        self._external = np.zeros(self.n, dtype=self.dtype)
+            self.activations = xp.zeros(self.n, dtype=self.dtype)
+        self._external = xp.zeros(self.n, dtype=self.dtype)
         self._decay = {}
 
     # ---- input -----------------------------------------------------------
@@ -85,7 +103,7 @@ class LabBrainRuntime:
         204-neuron ORN population and a 2-neuron DN pair are driven comparably
         -- the same convention the three upstream bridges used.
         """
-        idx = self.channels.get(channel)
+        idx = self._dev_channels.get(channel)
         if idx is None or not len(idx):
             return
         self._external[idx] = intensity / len(idx)
@@ -96,7 +114,7 @@ class LabBrainRuntime:
         sustained `set_input` on the same channel. Duration rather than a tick
         count, so a pulse lasts the same wall time at any tick rate.
         """
-        idx = self.channels.get(channel)
+        idx = self._dev_channels.get(channel)
         if idx is None or not len(idx):
             return
         life = max(1e-6, float(decay_seconds))
@@ -117,16 +135,16 @@ class LabBrainRuntime:
             pulse["remaining"] -= dt
             if pulse["remaining"] <= 0:
                 del self._decay[channel]
-        self.activations = np.tanh(
+        self.activations = self.backend.xp.tanh(
             self.adjacency @ self.activations + I, dtype=self.dtype,
         )
 
     def read(self, channel: str) -> float:
         """Mean activation over a channel's real neurons, in [-1, 1]."""
-        idx = self.channels.get(channel)
+        idx = self._dev_channels.get(channel)
         if idx is None or not len(idx):
             return 0.0
-        return float(np.mean(self.activations[idx]))
+        return float(self.backend.xp.mean(self.activations[idx]))
 
     def read_all(self, names=None) -> dict:
         names = names if names is not None else self.channels.keys()
@@ -134,7 +152,8 @@ class LabBrainRuntime:
 
     def population_activity(self) -> float:
         """Mean |activation| over the whole graph -- the HUD's 'arousal' trace."""
-        return float(np.mean(np.abs(self.activations)))
+        xp = self.backend.xp
+        return float(xp.mean(xp.abs(self.activations)))
 
     def active_indices(self, threshold: float = 0.02, limit: int = 4000):
         """Indices of the most-active neurons, for the 3D soma point cloud.
@@ -147,18 +166,21 @@ class LabBrainRuntime:
         signal is diluted over 22x more neurons. An absolute 0.05 cut leaves the
         Mode A cloud permanently empty -- which it was, before this changed.
         """
-        mag = np.abs(self.activations)
+        xp = self.backend.xp
+        mag = xp.abs(self.activations)
         peak = float(mag.max()) if len(mag) else 0.0
         if peak <= 0.0:
             return np.array([], dtype=np.int64), np.array([], dtype=self.dtype)
-        hits = np.flatnonzero(mag >= peak * threshold)
+        hits = xp.flatnonzero(mag >= peak * threshold)
         if len(hits) > limit:
-            hits = hits[np.argpartition(mag[hits], -limit)[-limit:]]
-        return hits, self.activations[hits]
+            hits = hits[xp.argpartition(mag[hits], -limit)[-limit:]]
+        # Back to host: these are about to be JSON-serialized for the client.
+        return self.backend.to_host(hits), self.backend.to_host(self.activations[hits])
 
     def normalized_activity(self) -> np.ndarray:
         """Activations rescaled so the current peak is 1.0 -- what a display
         wants, given the dilution effect described in `active_indices`."""
-        mag = np.abs(self.activations)
+        xp = self.backend.xp
+        mag = xp.abs(self.activations)
         peak = float(mag.max()) if len(mag) else 0.0
-        return mag / peak if peak > 0 else mag
+        return self.backend.to_host(mag / peak if peak > 0 else mag)

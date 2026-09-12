@@ -115,6 +115,21 @@ failure mode that makes the whole thing worthless.
 
 ---
 
+## Two eyes, and why channel sides matter
+
+Visual populations carry a real `somaSide` annotation and respond asymmetrically
+(13×, measured). The avatar renders **two** eye cameras, splayed ±40°, each with
+its own retina and looming detector, each driving its own real side
+(`LPLC2_L` / `LPLC2_R`, `LC4_L` / `LC4_R`).
+
+Do not "simplify" this back to one eye summed into both sides. That was the
+original implementation and it made the fly walk in a straight line regardless
+of what was in front of it, because the steering signal became a constant.
+
+When you add a sensory channel, ask whether the real population has sides. If it
+does, give each side its own channel. If it does not — the ORN glomeruli are all
+annotated `?` in this dataset — inject symmetrically and say so.
+
 ## Working with connectome data
 
 Packs are **not committed** — they are multi-megabyte binaries rebuilt from the
@@ -158,6 +173,26 @@ in `connectome.py` guards this. Pruned subgraphs *are* renormalized, on purpose
 — a slice is a different network and needs its own scaling.
 
 ---
+
+## CPU and GPU
+
+Mode A runs on CPU (scipy) or GPU (cupy). `LabBrainRuntime` is written once
+against `backend.xp`, since cupy's sparse API matches scipy's — there is no
+second code path, and there should not be one.
+
+`device="auto"` is the default and the right one. Do **not** make `"gpu"` the
+default: a missing driver, a busy device or too little VRAM would become a crash
+on a machine where CPU would have worked.
+
+Two rules if you touch `device.py`:
+
+1. **Probe with the operation you actually use.** The GPU probe runs a real
+   sparse mat-vec plus `tanh`. A dense `cp.zeros(8).sum()` is not enough — a
+   cupy install missing `libcusparse` passes that and then throws on the first
+   real step, so `auto` selects the GPU and crashes instead of falling back.
+   That happened; the probe exists because of it.
+2. **Synchronize before timing.** CuPy launches are asynchronous, so an unsynced
+   benchmark measures the launch, not the work.
 
 ## Before you call it done
 

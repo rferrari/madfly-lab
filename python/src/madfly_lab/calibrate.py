@@ -53,26 +53,27 @@ CALIBRATION_DT = 1.0 / 60.0
 MIN_RESPONSE = 1e-9
 
 
-def _settle(adjacency, channels, input_names, output_names, drive) -> dict:
+def _settle(adjacency, channels, input_names, output_names, drive, backend=None) -> dict:
     from madfly_lab.brain import LabBrainRuntime
 
-    rt = LabBrainRuntime(adjacency, channels)
+    rt = LabBrainRuntime(adjacency, channels, backend=backend)
     for name in input_names:
         rt.set_input(name, drive)
     for _ in range(int(SETTLE_SECONDS / CALIBRATION_DT)):
         rt.step(CALIBRATION_DT)
 
     out = {}
+    acts = rt.backend.to_host(rt.activations)
     for name in output_names:
         idx = channels.get(name)
         if idx is None or not len(idx):
             continue
-        out[name] = max(float(np.mean(np.abs(rt.activations[idx]))), MIN_RESPONSE)
+        out[name] = max(float(np.mean(np.abs(acts[idx]))), MIN_RESPONSE)
     return out
 
 
 def measure(adjacency, channels: dict, input_names, output_names, *,
-            strict: bool = True) -> dict:
+            strict: bool = True, backend=None) -> dict:
     """Steady-state |activation| of each output channel under reference drive on
     all inputs at once. Returns {channel: reference_response}.
 
@@ -85,8 +86,8 @@ def measure(adjacency, channels: dict, input_names, output_names, *,
     drive is saturating this graph and the calibration would be an artefact --
     raise rather than ship it.
     """
-    full = _settle(adjacency, channels, input_names, output_names, REFERENCE_DRIVE)
-    half = _settle(adjacency, channels, input_names, output_names, REFERENCE_DRIVE / 2)
+    full = _settle(adjacency, channels, input_names, output_names, REFERENCE_DRIVE, backend)
+    half = _settle(adjacency, channels, input_names, output_names, REFERENCE_DRIVE / 2, backend)
 
     if strict and full:
         # Check only channels comfortably above the noise floor; a channel
