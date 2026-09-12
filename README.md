@@ -143,9 +143,9 @@ This sits on published connectome data, so the line matters.
 names. When you inject into `PAM11` you are driving 15 genuine dopaminergic
 neurons, and whatever happens downstream happens through real measured wiring.
 
-**Not real.** The dynamics are a rate model — `a ← tanh(W·a + I·dt)` — not
-spiking neurons, and there is no plasticity unless a scene adds it. Activations
-are dimensionless values in `[-1, 1]`: **not millivolts, not Hz.**
+**Not real.** The dynamics are a rate model — `a ← tanh(W·a + I)` — not spiking
+neurons, and there is no plasticity unless a scene adds it. Activations are
+dimensionless values in `[-1, 1]`: **not millivolts, not Hz.**
 `injectCurrent('PAM11', +20)` is input current in this model's own scale, and
 the HUD's "Hz" axis is a display convention this framework invented. The retina,
 the looming detector and the scent falloff are engineered image and geometry
@@ -174,6 +174,33 @@ packs/       generated .mflpack binaries (not committed)
 Per frame: arena renders the eye view offscreen → avatar senses into real
 sensory neurons → stations tick → brain steps on a **fixed** timestep → real
 descending neurons move the body → arena renders → HUD draws.
+
+### Reading a channel: raw vs calibrated
+
+Raw activations span ~1,900× across channels of a single pack — `PPL1` sits at
+5.6e-2 under reference drive while `courtship_hub` sits at 2.9e-5 — because each
+population is a different distance from the input in synapses and total weight.
+Mode A reads quieter still, since the same signal spreads over 22× more neurons.
+
+So every pack ships a **measured** reference response per channel, taken in the
+network's linear regime and verified there (doubling the drive must double every
+response, or the build fails):
+
+```javascript
+brain.read('DNp09')            // raw activation — honest, tiny, incomparable
+brain.readCalibrated('DNp09')  // ~[-1,1] — threshold on THIS
+brain.readLateralCalibrated('DNa01')   // calibrated left − right, for steering
+```
+
+`onSignal` thresholds and the telemetry HUD both use the calibrated value, so a
+threshold written once holds across channels, circuits and runtimes.
+
+### A note on settling
+
+With a static scene and no added noise the network reaches a fixed point and the
+avatar's motion converges — a rate model has no adaptation or spontaneous
+activity. Pass `noise` to `MadFlyLab` for a different real initial condition per
+run, or drive a station to keep the input changing.
 
 Read [AGENTS.md](AGENTS.md) before extending it.
 

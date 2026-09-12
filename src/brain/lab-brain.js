@@ -139,8 +139,24 @@ export class LabBrain {
   /** Mean activation over a channel's real neurons, in [-1, 1]. */
   read(channel) { return this.runtime ? this.runtime.read(channel) : 0; }
 
+  /**
+   * Calibrated read, roughly [-1, 1] -- raw activation divided by this
+   * channel's measured reference response.
+   *
+   * THIS is the one to threshold on. Raw activations span ~38,000x across
+   * channels of a single graph (DNp01 sits close to visual input, PAM11 does
+   * not), and Mode A's full graph reads ~4 orders of magnitude quieter than a
+   * pruned pack for the same input simply because the signal is diluted over
+   * 22x more neurons. Calibration removes both effects, so a threshold written
+   * once works across channels, circuits and runtimes. `read()` remains the
+   * honest raw value for anyone who wants it.
+   */
+  readCalibrated(channel) {
+    return this.runtime?.readCalibrated ? this.runtime.readCalibrated(channel) : this.read(channel);
+  }
+
   /** Display-only Hz for the telemetry HUD. See the units note above. */
-  readHz(channel) { return Math.abs(this.read(channel)) * HZ_PER_ACTIVATION; }
+  readHz(channel) { return Math.abs(this.readCalibrated(channel)) * HZ_PER_ACTIVATION; }
 
   /**
    * Left-minus-right difference across a paired descending neuron -- the real
@@ -149,6 +165,11 @@ export class LabBrain {
    * meaningful rather than decorative.
    */
   readLateral(base) { return this.read(`${base}_L`) - this.read(`${base}_R`); }
+
+  /** Calibrated left-minus-right. What a scene should steer on. */
+  readLateralCalibrated(base) {
+    return this.readCalibrated(`${base}_L`) - this.readCalibrated(`${base}_R`);
+  }
 
   populationActivity() { return this.runtime ? this.runtime.populationActivity() : 0; }
 
@@ -170,7 +191,9 @@ export class LabBrain {
     this.runtime.step(dt);
 
     for (const [channel, listeners] of this._signals) {
-      const value = this.read(channel);
+      // Calibrated, so a threshold means the same thing on any channel, in any
+      // circuit, in either runtime. See readCalibrated.
+      const value = this.readCalibrated(channel);
       const was = this._signalState.get(channel) ?? 0;
       for (const l of listeners) {
         const above = value >= l.threshold;

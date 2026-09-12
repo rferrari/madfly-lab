@@ -33,7 +33,11 @@ export class Telemetry {
 
   sample(brain) {
     for (const t of this.traces) {
-      const v = brain.read(t.channel);
+      // CALIBRATED, not raw. Raw activations on a pruned pack run around 3e-5,
+      // which renders as a flat "0 Hz" line on every trace -- a diagnostics
+      // panel that always reads zero is worse than no panel. Calibration puts
+      // every channel on a comparable ~[-1,1] scale first. See LabBrain.
+      const v = brain.readCalibrated(t.channel);
       t.history[t.head] = t.signed ? v : Math.abs(v);
       t.head = (t.head + 1) % HISTORY;
     }

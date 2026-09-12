@@ -1,11 +1,25 @@
 /**
  * Mode B -- the pruned subgraph running in the browser, on the main thread.
  *
- * Dynamics are exactly the ones running in fly_simulation_3d,
- * fly_drone_delivery and fly_speed_dating, transliterated from numpy to typed
- * arrays:
+ * Dynamics follow the ones running in fly_simulation_3d, fly_drone_delivery and
+ * fly_speed_dating, transliterated from numpy to typed arrays:
  *
- *     a <- tanh(W @ a + I * dt)
+ *     a <- tanh(W @ a + I)
+ *
+ * ONE DELIBERATE DIVERGENCE FROM THAT LINEAGE: those projects compute
+ * `tanh(W @ a + I * dt)`. Scaling a *sustained* input by dt makes the steady
+ * state depend on the tick rate -- `a* = tanh(W a* + I dt)` is a different
+ * fixed point for every dt. Measured on the courtship pack, one unchanged
+ * sensory drive produces:
+ *
+ *      20 Hz -> DNp09 4.94e-3        120 Hz -> DNp09 8.41e-4
+ *
+ * a 5.9x spread across tick rates. Each of those projects ran at a single fixed
+ * rate, so it never surfaced. MadFly Lab runs Mode B at 60 Hz and Mode A at
+ * ~20 Hz behind the same API, and a scene is promised it need not care which it
+ * got -- so a sustained input here contributes I directly and the steady state
+ * is a property of the input, not of the clock. One-shot pulses decay over a
+ * DURATION in seconds rather than a tick count, for the same reason.
  *
  * `W` arrives from the pack already stability-normalized (spectral radius 0.9,
  * diagonal self-inhibition -0.2) -- see python/src/madfly_lab/prune.py for why
@@ -36,7 +50,8 @@ export class PrunedRuntime {
     this.pulseBuffer = new Float32Array(this.n);
 
     // Decaying one-shot injections, keyed by channel so a second inject on the
-    // same channel replaces rather than stacks indefinitely.
+    // same channel replaces rather than stacks indefinitely. Remaining life is
+    // tracked in seconds, so a pulse lasts the same wall time at any tick rate.
     this.pulses = new Map();
     this.channelCache = new Map();
     this.t = 0;
@@ -68,16 +83,12 @@ export class PrunedRuntime {
     for (let k = 0; k < idx.length; k++) this.external[idx[k]] = per;
   }
 
-  /** One-shot pulse fading linearly over `decayTicks`. */
-  injectCurrent(channel, amount, decayTicks = 8) {
+  /** One-shot pulse fading linearly over `decaySeconds` of simulated time. */
+  injectCurrent(channel, amount, decaySeconds = 0.15) {
     const idx = this.resolve(channel);
     if (!idx.length) return;
-    this.pulses.set(channel, {
-      idx,
-      perNeuron: amount / idx.length,
-      remaining: Math.max(1, decayTicks | 0),
-      total: Math.max(1, decayTicks | 0),
-    });
+    const life = Math.max(1e-6, decaySeconds);
+    this.pulses.set(channel, { idx, perNeuron: amount / idx.length, remaining: life, total: life });
   }
 
   clearInputs() {
@@ -100,17 +111,17 @@ export class PrunedRuntime {
 
     pulseBuffer.set(external);
     for (const [channel, p] of this.pulses) {
-      const frac = p.remaining / p.total;
-      const amt = p.perNeuron * frac;
+      const amt = p.perNeuron * (p.remaining / p.total);
       for (let k = 0; k < p.idx.length; k++) pulseBuffer[p.idx[k]] += amt;
-      if (--p.remaining <= 0) this.pulses.delete(channel);
+      p.remaining -= dt;
+      if (p.remaining <= 0) this.pulses.delete(channel);
     }
 
     for (let row = 0; row < this.n; row++) {
       let sum = 0;
       const end = indptr[row + 1];
       for (let k = indptr[row]; k < end; k++) sum += data[k] * activations[indices[k]];
-      next[row] = Math.tanh(sum + pulseBuffer[row] * dt);
+      next[row] = Math.tanh(sum + pulseBuffer[row]);
     }
 
     this.activations.set(next);
@@ -125,6 +136,24 @@ export class PrunedRuntime {
     for (let k = 0; k < idx.length; k++) sum += this.activations[idx[k]];
     return sum / idx.length;
   }
+
+  /**
+   * Calibrated read in roughly [-1, 1]: raw activation divided by this
+   * channel's measured reference response, so ~1.0 means "as active as this
+   * channel gets under reference drive".
+   *
+   * Use this for anything comparing channels or thresholding behaviour; use
+   * `read()` when you want the honest raw activation. Falls back to the raw
+   * value for a channel the pack has no calibration for (an ad-hoc cell type
+   * resolved at runtime), rather than silently reporting a wrong scale.
+   */
+  readCalibrated(channel) {
+    const raw = this.read(channel);
+    const ref = this.pack.reference.get(channel);
+    return ref ? raw / ref : raw;
+  }
+
+  hasCalibration(channel) { return this.pack.reference.has(channel); }
 
   /** Mean |activation| over the whole graph -- the HUD's arousal trace. */
   populationActivity() {

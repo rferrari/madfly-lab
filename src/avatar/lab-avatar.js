@@ -31,6 +31,25 @@ import { LoomingDetector } from './motion.js';
 import { OlfactoryReceptors } from './olfaction.js';
 import { THEME } from '../core/theme.js';
 
+/**
+ * Sensor drive corresponding to a fully-saturated sensor (value 1.0).
+ *
+ * This MUST match `REFERENCE_DRIVE` in python/src/madfly_lab/calibrate.py. That
+ * is the drive each pack's per-channel calibration was measured at, so feeding
+ * sensors on the same scale makes a calibrated motor read of ~1.0 mean "this
+ * channel is as active as a fully-saturated sensor can make it".
+ *
+ * Before this existed the avatar fed raw hemifield means of ~0.05, ~20x below
+ * reference, and read RAW activations out the other side -- DNp09 came back at
+ * 2e-7 and the fly never moved at all. Both halves of that were wrong; this
+ * constant fixes the input half and readCalibrated fixes the output half.
+ */
+export const SENSOR_REFERENCE_DRIVE = 1.0;
+
+/** Looming drives harder than reference: an expanding threat should be able to
+ *  push the escape pathway well past what ordinary scenery does. */
+export const LOOM_DRIVE_GAIN = 6.0;
+
 export class LabAvatar {
   constructor({
     position = [0, 0.4, 0],
@@ -129,8 +148,12 @@ export class LabAvatar {
       const { left, right } = this.retina.hemifields(response);
       this.sensors.left = left;
       this.sensors.right = right;
-      brain.setInput('LPLC1', left + right);
-      brain.setInput('LPLC2', left + right);
+      // Hemifield means are each in [0,1]; their mean is the eye's overall
+      // luminance, scaled onto the calibration reference so the pack's measured
+      // per-channel responses apply.
+      const luminance = ((left + right) / 2) * SENSOR_REFERENCE_DRIVE;
+      brain.setInput('LPLC1', luminance);
+      brain.setInput('LPLC2', luminance);
 
       const loom = this.looming.step(eyePixels, time);
       this.sensors.loom = loom.loom;
@@ -138,7 +161,7 @@ export class LabAvatar {
       this.sensors.loomR = loom.right;
       // One LC4 channel in the shipped packs (the real LC4 subtypes carry no
       // usable L/R split here), so the two hemifields are summed into it.
-      brain.setInput('LC4', (loom.left + loom.right) * 6);
+      brain.setInput('LC4', (loom.left + loom.right) * SENSOR_REFERENCE_DRIVE * LOOM_DRIVE_GAIN);
 
       if (this.eyeMeshes) {
         for (const [i, eye] of this.eyeMeshes.entries()) {
@@ -158,13 +181,19 @@ export class LabAvatar {
    * Called by the lab after `brain.step()`.
    */
   act(brain, dt, time) {
+    // All three reads are CALIBRATED, not raw. Raw activations span ~1,900x
+    // across these channels in the courtship pack alone (PPL1 5.6e-2 down to
+    // courtship_hub 2.9e-5), and Mode A reads ~4 orders quieter than Mode B for
+    // identical input. Raw values cannot drive a body; one set of gains could
+    // never suit all of them. See LabBrain.readCalibrated.
+    //
     // DNa01: real steering DN, clean L/R pair -> a genuine lateral difference.
-    const steer = brain.readLateral('DNa01');
+    const steer = brain.readLateralCalibrated('DNa01');
     // DNp09: real forward-walking-promoting DN (Bidaye et al. 2020).
-    const forward = brain.read('DNp09');
+    const forward = brain.readCalibrated('DNp09');
     // DNp01: the Giant Fiber. A real escape command neuron -- when it fires the
     // fly does not steer, it leaves.
-    const escape = brain.read('DNp01');
+    const escape = brain.readCalibrated('DNp01');
 
     this.motor.steer = steer;
     this.motor.forward = forward;

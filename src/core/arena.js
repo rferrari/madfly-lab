@@ -94,8 +94,13 @@ export class Arena {
   }
 
   _buildFloor() {
+    // The floor must out-reach the fog, or its far edge shows as a hard horizon
+    // line against the background. FogExp2 at density 0.014 is ~99% opaque at
+    // sqrt(4.6)/0.014 = 153 units, so a size*2 (=80u) plane ended well inside
+    // visible range and drew a visible seam. FLOOR_REACH covers it with margin.
+    const FLOOR_REACH = Math.max(this.size * 2, Math.sqrt(4.6) / this.scene.fog.density) * 2.2;
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(this.size * 2, this.size * 2),
+      new THREE.PlaneGeometry(FLOOR_REACH, FLOOR_REACH),
       new THREE.MeshStandardMaterial({ color: THEME.floor, roughness: 0.85, metalness: 0.25 }),
     );
     floor.rotation.x = -Math.PI / 2;

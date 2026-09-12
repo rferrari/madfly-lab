@@ -39,7 +39,7 @@ import time
 
 import numpy as np
 
-from madfly_lab import circuits
+from madfly_lab import calibrate, circuits
 from madfly_lab.brain import LabBrainRuntime
 from madfly_lab.connectome import _normalize_weight_matrix, is_normalized, load_or_build_connectome
 
@@ -68,7 +68,7 @@ class LabSession:
         elif op == "inject":
             self.runtime.inject_current(
                 msg["channel"], float(msg.get("amount", 0.0)),
-                int(msg.get("decayTicks", 8)),
+                float(msg.get("decaySeconds", msg.get("decayTicks", 0.15))),
             )
         elif op == "clear":
             self.runtime.clear_inputs()
@@ -131,6 +131,7 @@ async def _handle(ws, shared):
             "dataset": shared["dataset"],
             "source": shared["source"],
             "channels": {k: int(len(v)) for k, v in shared["channels"].items()},
+            "reference": shared["reference"],
         }))
 
         dt = 1.0 / tick_hz
@@ -214,10 +215,22 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str) -> dict:
           f"(dtype={probe.dtype}).")
     if per_step > 1 / 30:
         print("  NOTE: below 30 Hz. Scenes needing a faster brain should use a Mode B pack.")
+
+    # Same measurement the packs ship, run against the FULL graph. Without it a
+    # calibrated read means nothing in Mode A -- and raw activations here are
+    # orders of magnitude quieter than on a pruned pack for identical input,
+    # purely because the signal spreads over 22x more neurons. Calibration is
+    # what makes one scene's thresholds work in both runtimes.
+    print("  calibrating per-channel response over the full graph...")
+    reference = calibrate.measure(
+        W, channels, list(circuit.inputs), list(circuit.outputs), strict=False,
+    )
+    print(calibrate.report(reference))
     print("  ready.")
     return {
         "adjacency": W, "channels": channels, "n": c.n_sm,
         "nnz": int(c.sm_adjacency.nnz), "dataset": c.dataset, "source": c.source,
+        "reference": reference,
     }
 
 

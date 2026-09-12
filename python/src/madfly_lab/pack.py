@@ -27,6 +27,8 @@ import time
 import numpy as np
 import scipy.sparse as sp
 
+from madfly_lab.calibrate import REFERENCE_DRIVE as CALIBRATION_REFERENCE_DRIVE
+
 MAGIC = b"MFLPACK1"
 FORMAT_VERSION = 1
 
@@ -68,21 +70,35 @@ class _BlobWriter:
         return b"".join(self.chunks)
 
 
+# Fraction of neurons the normalized coordinates are scaled to contain. Scaling
+# by the absolute maximum instead leaves the point cloud tiny: measured on the
+# courtship pack, 90% of somas sit within radius 0.26 of the centroid while a
+# handful of outliers reach 1.07, so max-scaling shrinks the visible brain to a
+# quarter of the frame to make room for a few stray cells. Points beyond this
+# percentile simply extend past the unit box, which no consumer minds.
+SOMA_SCALE_PERCENTILE = 98.0
+
+
 def _soma_transform(xyz: np.ndarray):
-    """Center and unit-scale real soma coordinates for rendering.
+    """Center and robustly unit-scale real soma coordinates for rendering.
 
     Source coordinates are male-cns voxel/nm coordinates spanning tens of
     thousands of units. The renderer wants something around unit size, so the
-    pack ships centered/scaled float32 plus the exact inverse transform --
-    a scene that needs real coordinates back can always recover them, and the
+    pack ships centered/scaled float32 plus the exact inverse transform -- a
+    scene that needs real coordinates back can always recover them, and the
     point cloud never has to guess a scale factor.
+
+    Centering uses the MEDIAN rather than the mean for the same robustness
+    reason: a lopsided outlier tail would otherwise drag the whole cloud
+    off-centre in the panel.
     """
     valid = np.isfinite(xyz).all(axis=1) & (xyz != 0).any(axis=1)
     if not valid.any():
         return np.zeros_like(xyz, dtype=np.float32), valid, [0.0, 0.0, 0.0], 1.0
     good = xyz[valid]
-    center = good.mean(axis=0)
-    scale = float(np.abs(good - center).max()) or 1.0
+    center = np.median(good, axis=0)
+    radii = np.linalg.norm(good - center, axis=1)
+    scale = float(np.percentile(radii, SOMA_SCALE_PERCENTILE)) or 1.0
     out = np.zeros_like(xyz, dtype=np.float32)
     out[valid] = ((good - center) / scale).astype(np.float32)
     return out, valid, [float(v) for v in center], scale
@@ -90,7 +106,8 @@ def _soma_transform(xyz: np.ndarray):
 
 def write_pack(path: str, pruned, channels: dict, circuit, *,
                adjacency: sp.csr_matrix, self_inhibition: float,
-               target_spectral_radius: float, also_gzip: bool = True) -> dict:
+               target_spectral_radius: float, calibration: dict | None = None,
+               also_gzip: bool = True) -> dict:
     """Serialize one pruned circuit to `path`. Returns the header dict."""
     W = adjacency.tocsr().astype(np.float32)
     n = W.shape[0]
@@ -119,7 +136,13 @@ def write_pack(path: str, pruned, channels: dict, circuit, *,
             kind.append("input")
         if name in circuit.outputs:
             kind.append("output")
-        channel_meta[name] = {"array": key, "count": int(len(idx)), "kind": kind}
+        meta = {"array": key, "count": int(len(idx)), "kind": kind}
+        # Measured steady-state |activation| under reference drive. See
+        # calibrate.py: raw activations span ~38,000x across channels of one
+        # graph, so a runtime needs this to offer comparable readings.
+        if calibration and name in calibration:
+            meta["reference"] = calibration[name]
+        channel_meta[name] = meta
 
     header = {
         "format": "mflpack",
@@ -141,13 +164,19 @@ def write_pack(path: str, pruned, channels: dict, circuit, *,
         # stable tanh dynamics (see prune.normalized_adjacency), so a runtime
         # that re-normalized would double-scale them.
         "dynamics": {
+            # `a <- tanh(W a + I)`. NOTE: no dt on the input term -- see
+            # pruned-runtime.js / brain.py for why scaling sustained input by dt
+            # made the steady state depend on the tick rate.
             "activation": "tanh",
+            "inputScaledByDt": False,
             "selfInhibition": self_inhibition,
             "targetSpectralRadius": target_spectral_radius,
             "preNormalized": True,
+            "calibrationDrive": CALIBRATION_REFERENCE_DRIVE,
         },
         "soma": {
             "units": "normalized",
+            "scalePercentile": SOMA_SCALE_PERCENTILE,
             "inverse": {"center": center, "scale": scale},
             "note": "original = normalized * scale + center, in male-cns source units",
         },

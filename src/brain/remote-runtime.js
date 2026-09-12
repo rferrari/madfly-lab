@@ -117,6 +117,17 @@ export class RemoteRuntime {
 
   read(channel) { return this.readings.get(channel) ?? 0; }
 
+  /** See PrunedRuntime.readCalibrated. The server measures the full graph's
+   *  reference responses at startup and ships them in its `ready` frame, so a
+   *  calibrated read means the same thing in both modes even though the raw
+   *  activations differ by orders of magnitude between them. */
+  readCalibrated(channel) {
+    const ref = this.info?.reference?.[channel];
+    return ref ? this.read(channel) / ref : this.read(channel);
+  }
+
+  hasCalibration(channel) { return !!this.info?.reference?.[channel]; }
+
   populationActivity() { return this.population; }
 
   /** Mode A streams only the most-active few thousand neurons, not all 176k. */

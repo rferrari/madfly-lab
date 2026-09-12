@@ -1,12 +1,21 @@
 """LabBrain's Python side -- the Mode A (full-connectome) neural runtime.
 
 Generalized from the NeuralBridge lineage running in fly_simulation_3d ->
-fly_drone_delivery -> fly_speed_dating. The dynamics are unchanged from all
-three:
+fly_drone_delivery -> fly_speed_dating:
 
-    a <- tanh(W @ a + I * dt)
+    a <- tanh(W @ a + I)
 
-What changes here is the interface. Those three each hardcoded their own game's
+ONE DELIBERATE DIVERGENCE from those three, which compute `tanh(W @ a + I*dt)`:
+scaling a *sustained* input by dt makes the steady state depend on the tick
+rate. Measured on the courtship pack, one unchanged sensory drive gave DNp09
+4.94e-3 at 20 Hz and 8.41e-4 at 120 Hz -- a 5.9x spread. Each of those projects
+ran at a single fixed rate so it never mattered. This server ticks at ~20 Hz
+while the browser packs run at 60, behind an API that promises a scene need not
+care which runtime it got, so sustained input contributes I directly and one-
+shot pulses decay over a duration in seconds rather than a tick count. Mode A
+and Mode B now agree to 5 significant figures on the same input.
+
+What else changes here is the interface. Those three each hardcoded their own game's
 input and readout neurons into the bridge itself (steer_l/steer_r/forward_drive,
 or accept_l/turn_r). A framework can't do that: a scene names its own channels,
 so injection and readout are both dictionary-driven against the circuit's
@@ -81,19 +90,18 @@ class LabBrainRuntime:
             return
         self._external[idx] = intensity / len(idx)
 
-    def inject_current(self, channel: str, amount: float, decay_ticks: int = 8) -> None:
-        """One-shot pulse that fades over `decay_ticks` -- what the SDK's
-        `brain.injectCurrent()` calls. Additive on top of any sustained
-        `set_input` on the same channel.
+    def inject_current(self, channel: str, amount: float, decay_seconds: float = 0.15) -> None:
+        """One-shot pulse that fades over `decay_seconds` of simulated time --
+        what the SDK's `brain.injectCurrent()` calls. Additive on top of any
+        sustained `set_input` on the same channel. Duration rather than a tick
+        count, so a pulse lasts the same wall time at any tick rate.
         """
         idx = self.channels.get(channel)
         if idx is None or not len(idx):
             return
+        life = max(1e-6, float(decay_seconds))
         self._decay[channel] = {
-            "idx": idx,
-            "per_neuron": amount / len(idx),
-            "remaining": max(1, int(decay_ticks)),
-            "total": max(1, int(decay_ticks)),
+            "idx": idx, "per_neuron": amount / len(idx), "remaining": life, "total": life,
         }
 
     def clear_inputs(self) -> None:
@@ -105,14 +113,12 @@ class LabBrainRuntime:
     def step(self, dt: float) -> None:
         I = self._external.copy()  # already self.dtype -- do not let this widen
         for channel, pulse in list(self._decay.items()):
-            frac = pulse["remaining"] / pulse["total"]
-            I[pulse["idx"]] += pulse["per_neuron"] * frac
-            pulse["remaining"] -= 1
+            I[pulse["idx"]] += pulse["per_neuron"] * (pulse["remaining"] / pulse["total"])
+            pulse["remaining"] -= dt
             if pulse["remaining"] <= 0:
                 del self._decay[channel]
         self.activations = np.tanh(
-            self.adjacency @ self.activations + I * np.asarray(dt, dtype=self.dtype),
-            dtype=self.dtype,
+            self.adjacency @ self.activations + I, dtype=self.dtype,
         )
 
     def read(self, channel: str) -> float:

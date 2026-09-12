@@ -89,8 +89,24 @@ failure mode that makes the whole thing worthless.
    "Hz" axis is a display convention this framework invented (see
    `HZ_PER_ACTIVATION`). Never write a comment or a label implying otherwise.
 
-4. **Dynamics.** `a ← tanh(W·a + I·dt)` is a rate model, not spiking neurons.
+4. **Dynamics.** `a ← tanh(W·a + I)` is a rate model, not spiking neurons.
    There is no plasticity unless a scene adds it explicitly.
+
+   Note the missing `dt` on the input term. The vendored lineage computes
+   `tanh(W·a + I·dt)`, which makes a sustained input's steady state a function
+   of the tick rate — measured, one drive gave DNp09 4.94e-3 at 20 Hz and
+   8.41e-4 at 120 Hz. Those projects each ran one fixed rate so it never showed.
+   Mode A ticks near 20 Hz and Mode B at 60 behind one API, so this framework
+   drops the `dt` and decays pulses over a duration in seconds. Do not
+   reintroduce it.
+
+6. **Threshold on calibrated reads, never raw.** Raw activations span ~1,900×
+   across channels of one pack and differ by orders of magnitude between Mode A
+   and Mode B. `brain.readCalibrated()` divides by a per-channel reference
+   **measured** at pack build time in the network's linear regime. `read()` is
+   still there and still honest — just not comparable. If you add a channel,
+   rebuild the pack so it gets calibrated; `build_pack.py` fails loudly if the
+   reference drive has drifted out of the linear regime.
 
 5. **Mock fallback must be loud.** `connectome.py` falls back to a synthetic
    mock graph without a NeuPrint token. Packs built from it are structurally

@@ -127,8 +127,12 @@ export class LabObserver {
       this.somaCloud.update(brain.runtime?.activationView?.(), dt, brain.runtime?.cloud);
       this.somaCloud.render();
       if (this.cloudNote) {
+        // Mean |activation| on a pruned pack sits around 2.5e-4, which renders
+        // as "0.0%" at one decimal. Exponent notation keeps the panel
+        // informative across both runtimes, where the scales differ by ~1e4.
+        const pop = brain.populationActivity();
         this.cloudNote.textContent = `${brain.nNeurons.toLocaleString()} real neurons · `
-          + `${(brain.populationActivity() * 100).toFixed(1)}% mean activity`;
+          + `mean |a| ${pop > 0 ? pop.toExponential(2) : '0'}`;
       }
     }
 

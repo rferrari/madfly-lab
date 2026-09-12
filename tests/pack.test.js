@@ -79,13 +79,27 @@ describe('mflpack format', { skip }, () => {
     }
   });
 
-  test('soma coordinates are centred and unit-scaled', () => {
-    let max = 0;
+  test('soma coordinates are centred and robustly unit-scaled', () => {
+    // Scaling is by a percentile, not the absolute max: 90% of somas sit within
+    // radius 0.26 of the centroid while stragglers reach 1.07, so max-scaling
+    // shrank the rendered brain to a quarter of the panel to accommodate a
+    // handful of cells. So the BULK must be unit-scaled; outliers may exceed 1.
+    const radii = [];
     for (let i = 0; i < minimal.nNeurons; i++) {
       if (!minimal.somaValid[i]) continue;
-      for (let k = 0; k < 3; k++) max = Math.max(max, Math.abs(minimal.somaXYZ[i * 3 + k]));
+      radii.push(Math.hypot(
+        minimal.somaXYZ[i * 3], minimal.somaXYZ[i * 3 + 1], minimal.somaXYZ[i * 3 + 2],
+      ));
     }
-    assert.ok(max > 0.1 && max <= 1.001, `soma extent ${max} outside unit box`);
+    radii.sort((a, b) => a - b);
+    const pct = minimal.header.soma.scalePercentile;
+    assert.ok(pct > 0 && pct < 100, 'pack did not record its scale percentile');
+
+    const atPct = radii[Math.floor((pct / 100) * (radii.length - 1))];
+    assert.ok(Math.abs(atPct - 1) < 0.02, `p${pct} radius is ${atPct}, expected ~1`);
+    // And the cloud must genuinely fill the box, not hide in a corner of it.
+    const median = radii[Math.floor(0.5 * (radii.length - 1))];
+    assert.ok(median > 0.1, `median radius ${median} -- cloud collapsed to a point`);
     assert.ok(minimal.header.soma.inverse.scale > 1000, 'inverse transform lost real scale');
   });
 });
@@ -119,12 +133,46 @@ describe('PrunedRuntime dynamics', { skip }, () => {
     assert.ok(after > before, `LC4 drive did not reach DNa01 (${before} -> ${after})`);
   });
 
-  test('injectCurrent decays instead of latching on', () => {
+  test('injectCurrent decays over a DURATION, not a tick count', () => {
     const rt = new PrunedRuntime(minimal);
-    rt.injectCurrent('LPLC2', 50, 10);
+    rt.injectCurrent('LPLC2', 50, 0.2);   // 0.2 simulated seconds
     assert.equal(rt.pulses.size, 1);
-    for (let i = 0; i < 10; i++) rt.step(1 / 60);
+    for (let i = 0; i < 6; i++) rt.step(1 / 60);   // 0.1s -- still alive
+    assert.equal(rt.pulses.size, 1, 'pulse expired early');
+    for (let i = 0; i < 8; i++) rt.step(1 / 60);   // past 0.2s
     assert.equal(rt.pulses.size, 0, 'pulse never expired');
+  });
+
+  test('steady state is independent of tick rate', () => {
+    // Regression: the vendored lineage computes tanh(W a + I*dt), which makes a
+    // sustained input's fixed point a function of the clock -- one drive gave
+    // DNp09 4.94e-3 at 20Hz and 8.41e-4 at 120Hz, a 5.9x spread. Mode A ticks
+    // at ~20Hz and Mode B at 60Hz behind one API, so this must not vary.
+    const settle = (hz) => {
+      const rt = new PrunedRuntime(minimal);
+      rt.setInput('LPLC2', 1.0);
+      for (let i = 0; i < Math.round(4 * hz); i++) rt.step(1 / hz);
+      return rt.read('DNp03');
+    };
+    const base = settle(60);
+    assert.ok(Math.abs(base) > 0, 'no response at all -- test is not measuring anything');
+    for (const hz of [20, 30, 120]) {
+      const rel = Math.abs(settle(hz) - base) / Math.abs(base);
+      assert.ok(rel < 1e-4, `${hz}Hz differs from 60Hz by ${(rel * 100).toFixed(2)}%`);
+    }
+  });
+
+  test('pulse magnitude is independent of tick rate', () => {
+    const peak = (hz) => {
+      const rt = new PrunedRuntime(minimal);
+      rt.injectCurrent('LPLC2', 20, 0.15);
+      let p = 0;
+      for (let i = 0; i < Math.round(2 * hz); i++) { rt.step(1 / hz); p = Math.max(p, Math.abs(rt.read('LPLC2'))); }
+      return p;
+    };
+    const base = peak(60);
+    assert.ok(base > 0);
+    assert.ok(Math.abs(peak(20) - base) / base < 1e-3, '20Hz pulse peak differs from 60Hz');
   });
 
   test('an unknown channel warns and stays silent rather than throwing', () => {
@@ -154,6 +202,48 @@ describe('PrunedRuntime dynamics', { skip }, () => {
     const found = rt.resolve(type);
     assert.ok(found.length > 0, `could not resolve real type "${type}" present in the pack`);
     assert.ok([...found].includes(extra));
+  });
+});
+
+describe('channel calibration', { skip }, () => {
+  test('every output channel ships a measured reference', () => {
+    for (const name of minimal.channelNames('output')) {
+      const ref = minimal.reference.get(name);
+      assert.ok(ref > 0, `channel ${name} has no calibration reference`);
+    }
+  });
+
+  test('calibration was measured in the linear regime', () => {
+    // If the reference drive saturated the network, the ratios between channels
+    // would be an artefact of tanh clipping rather than of the connectome. A
+    // saturated reference reads ~1.0; these should all be far below it.
+    for (const [name, ref] of minimal.reference) {
+      assert.ok(ref < 0.5, `${name} reference ${ref} suggests a saturated calibration`);
+    }
+  });
+
+  test('calibrated reads put disparate channels on one scale', () => {
+    const rt = new PrunedRuntime(minimal);
+    for (const c of minimal.channelNames('input')) rt.setInput(c, 1.0);
+    for (let i = 0; i < 300; i++) rt.step(1 / 60);
+
+    const outs = minimal.channelNames('output');
+    const raw = outs.map((c) => Math.abs(rt.read(c))).filter((v) => v > 0);
+    const cal = outs.map((c) => Math.abs(rt.readCalibrated(c))).filter((v) => v > 0);
+    const spread = (a) => Math.max(...a) / Math.min(...a);
+
+    assert.ok(spread(raw) > 10, `raw spread ${spread(raw).toFixed(0)}x -- expected channels to differ`);
+    assert.ok(spread(cal) < 2, `calibrated spread ${spread(cal).toFixed(2)}x -- calibration did not normalize`);
+  });
+
+  test('an uncalibrated channel falls back to raw rather than a wrong scale', () => {
+    const rt = new PrunedRuntime(minimal);
+    for (const c of minimal.channelNames('input')) rt.setInput(c, 1.0);
+    for (let i = 0; i < 60; i++) rt.step(1 / 60);
+    const adhoc = minimal.typeOf(0);           // a real type with no shipped channel
+    if (!minimal.reference.has(adhoc)) {
+      assert.equal(rt.readCalibrated(adhoc), rt.read(adhoc));
+    }
   });
 });
 

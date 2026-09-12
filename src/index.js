@@ -42,6 +42,7 @@ export { LabAvatar } from './avatar/lab-avatar.js';
 export { CompoundEye, fovForRetina } from './avatar/retina.js';
 export { LoomingDetector } from './avatar/motion.js';
 export { OlfactoryReceptors, OLFACTORY_CHANNELS } from './avatar/olfaction.js';
+export { SENSOR_REFERENCE_DRIVE, LOOM_DRIVE_GAIN } from './avatar/lab-avatar.js';
 
 export { LabBrain, HZ_PER_ACTIVATION } from './brain/lab-brain.js';
 export { PrunedRuntime } from './brain/pruned-runtime.js';

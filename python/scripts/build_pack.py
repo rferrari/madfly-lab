@@ -14,7 +14,7 @@ import argparse
 import os
 import sys
 
-from madfly_lab import circuits
+from madfly_lab import calibrate, circuits
 from madfly_lab.connectome import load_or_build_connectome
 from madfly_lab.pack import write_pack
 from madfly_lab.prune import normalized_adjacency, prune_for_circuit
@@ -35,6 +35,12 @@ def build_one(c, name: str, out_dir: str) -> dict:
         target_spectral_radius=TARGET_SPECTRAL_RADIUS,
     )
 
+    print("Calibrating per-channel response (measured, not tuned)...")
+    reference = calibrate.measure(
+        W, channels, list(circuit.inputs), list(circuit.outputs),
+    )
+    print(calibrate.report(reference))
+
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"{name}.mflpack")
     header = write_pack(
@@ -42,6 +48,7 @@ def build_one(c, name: str, out_dir: str) -> dict:
         adjacency=W,
         self_inhibition=SELF_INHIBITION,
         target_spectral_radius=TARGET_SPECTRAL_RADIUS,
+        calibration=reference,
     )
     raw = os.path.getsize(path) / 1e6
     gz = os.path.getsize(path + ".gz") / 1e6

@@ -46,8 +46,14 @@ export class ConnectomePack {
 
     // channel name -> Int32Array of neuron indices in THIS graph.
     this.channels = new Map();
+    // channel name -> measured steady-state |activation| under reference drive.
+    // Raw activations span ~38,000x across channels of one graph (see
+    // python/src/madfly_lab/calibrate.py), so this is what lets a runtime offer
+    // readings that are comparable between channels and portable between packs.
+    this.reference = new Map();
     for (const [name, meta] of Object.entries(header.channels)) {
       this.channels.set(name, this.array(meta.array));
+      if (typeof meta.reference === 'number') this.reference.set(name, meta.reference);
     }
   }
 

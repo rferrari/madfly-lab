@@ -71,22 +71,40 @@ times a float64 vector on **every call**; on this graph that mismatch costs
 server near 5 Hz. `LabBrainRuntime` pins `self.dtype` from the matrix for this
 reason.
 
-## Mode A and Mode B are not numerically identical
+## Mode A and Mode B agree — once calibrated
 
-The same real input produces much smaller activations on the full graph than on
-a pruned pack — around `1e-5` versus `1e-1` — simply because the signal is
-diluted across 22× more neurons. Both are the same real connectivity and the
-same dynamics; the scale differs.
+**Raw** activations differ enormously between the two: the same input reads
+around `1e-5` on the full graph versus `1e-1` on a pruned pack, purely because
+the signal spreads across 22× more neurons. Raw readings are therefore not
+portable, and an `onSignal` threshold tuned on one would never fire on the other.
 
-Consequences:
+Calibration fixes this. The server measures per-channel reference responses over
+the full graph at startup — the same measurement `build_pack.py` bakes into each
+pack — and ships them in the `ready` frame, so `readCalibrated()` means the same
+thing in both runtimes. Measured, identical real input (drive 1.0 on
+LPLC1/LPLC2/LC4), both calibrated:
 
-- **Thresholds do not port directly.** An `onSignal` threshold tuned in Mode B
-  will rarely fire in Mode A. Scale by peak, or tune per mode.
-- **The soma cloud uses a relative cut.** `active_indices` thresholds against
-  the current peak, not an absolute value. An absolute 0.05 cut leaves the Mode
-  A cloud permanently empty — it did, before this was fixed.
-- **`peak` ships in every tick** so a client can normalize.
+| channel | Mode A (176,422n) | Mode B (7,922n) | ratio |
+|---|--:|--:|--:|
+| `DNp01` | 0.9903 | 0.9888 | **1.00×** |
+| `DNp03` | 0.9953 | 0.9926 | **1.00×** |
+| `DNp09` | 0.8896 | 0.8835 | **1.01×** |
+| `DNa01` | 0.5186 | 0.4330 | 1.20× |
+| `DNp13` | 0.1746 | 0.1079 | 1.62× |
+| `PPL1`  | 0.0001 | 0.0001 | 1.02× |
 
-Mode A's value is that the signal travels through the *whole* real brain,
-including every pathway pruning removed. Mode B's value is that it runs at 60 Hz
-in a tab with no server. Pick per scene.
+The strong motor channels match to within 1%. `DNa01` and `DNp13` diverge more,
+and that divergence is real rather than an artefact: they sit further from the
+visual input, so a larger share of what reaches them travels through pathways
+pruning removed. **That is exactly what Mode A is for** — the signal goes through
+the whole brain, including everything the pack dropped.
+
+Two further consequences of the scale difference:
+
+- **The soma cloud uses a relative cut.** `active_indices` thresholds against the
+  current peak, not an absolute value. An absolute 0.05 cut left the Mode A cloud
+  permanently empty — it did, before this was fixed.
+- **`peak` ships in every tick** so a client can normalize independently.
+
+Mode B's value is 60 Hz in a tab with no server. Pick per scene; the API is the
+same either way.
