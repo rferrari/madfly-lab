@@ -16,8 +16,13 @@ export const CIRCUITS = {
   'courtship': {
     label: 'Courtship & foraging',
     neurons: 6748,
-    description: 'The default. Core plus the pC1/aSP courtship hub, DNp13 '
-      + '(copulation attempt) and the dopaminergic populations.',
+    // THE DEFAULT, and the right one for a first run: it is the only circuit
+    // where every station in the lab does something. The others are complete
+    // flies too, but a Mate emits pheromone into a brain with no pC1/aSP hub
+    // to receive it, or a Screen pays dopamine into a brain with no PAM11.
+    description: 'The default, and the fullest: core plus the pC1/aSP courtship '
+      + 'hub, DNp13 (copulation attempt), PAM11/PPL1 dopamine and the mushroom '
+      + 'body. The only circuit where every station in the lab does something.',
   },
   'escape': {
     label: 'Escape & steering',

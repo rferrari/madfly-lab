@@ -137,6 +137,18 @@ Each is a real pruned subgraph, built offline from the full connectome.
 | `courtship` | 6,748 | 0.9 MB | pC1/aSP hub, DNp13, dopamine |
 | `full` | **176,422** | — | everything; runs on the Mode A server |
 
+**Start with `courtship`** — it is the default, and the only circuit where
+*every* station in the lab does something. The others are complete flies too,
+but a `Mate` emits pheromone into a brain with no pC1/aSP hub to receive it, or
+a `Screen` pays dopamine into a brain with no PAM11:
+
+| station | minimal | escape | dopamine | courtship |
+|---|:-:|:-:|:-:|:-:|
+| food bowls, hazard fan, poke, walking | ✅ | ✅ | ✅ | ✅ |
+| screen → PAM11 dopamine | — | — | ✅ | ✅ |
+| mushroom body / learning | — | — | ✅ | ✅ |
+| mate → courtship hub → DNp13 | — | — | — | ✅ |
+
 **Every circuit contains the same sensory and motor core** — two eyes, four
 glomeruli, taste, touch, and the full descending motor set including feeding.
 Circuits differ by what they add depth to, never by what they are missing. A
@@ -159,10 +171,20 @@ shipping a channel that silently does nothing.
 ```bash
 make setup                       # node + python deps
 make packs CACHE=/path/to/.cache # build packs from the real connectome
-make dev                         # http://localhost:8330
-make brain                       # optional: Mode A server (GPU if present)
-make setup-gpu                   # optional: CUDA for Mode A
-make test                        # 43 tests against real packs
+make start                       # ← the one you want: full brain + the lab
+```
+
+`make start` brings up the Mode A server (all 176,422 neurons, GPU if you have
+one), **waits for it to finish loading**, then opens the lab wired to it. That
+wait matters: the frontend gives a Mode A server only a few seconds before
+falling back to an in-tab pack, and the full connectome needs ~60–90s to load.
+
+```bash
+make dev        # just the frontend (in-tab pruned pack, instant)
+make brain      # just the Mode A server
+make setup-gpu  # optional: CUDA, worth 16.7x on the full connectome
+make test       # 43 tests against real packs
+make            # list every target
 ```
 
 `make` on its own lists every target. `CACHE` points at the directory holding

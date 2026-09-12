@@ -4,8 +4,10 @@
 #   make setup      install everything (node + python, GPU optional)
 #   make packs      build the browser connectome packs
 #   make dev        run the lab at http://localhost:8330
-#   make brain      run the Mode A server (all 176,422 neurons, GPU if present)
-#   make all-in     packs + brain + dev, in one go
+#   make brain      run only the Mode A server (all 176,422 neurons)
+#   make start      brain + frontend together -- the usual one
+#                   (clears stale processes first; REUSE=1 keeps a warm brain)
+#   make all-in     rebuild packs first, then start
 #
 # CACHE points at the directory holding connectome_<dataset>_full.npz (~80MB).
 # It is not in this repo -- override it if yours lives elsewhere:
@@ -18,9 +20,15 @@ PORT    ?= 8330
 DEVICE  ?= auto
 PY       = python/.venv/bin/python
 
+BRAIN_PORT ?= 8770
+BRAIN_LOG  ?= /tmp/madfly-brain.log
+BRAIN_PID  ?= /tmp/madfly-brain.pid
+BRAIN_WAIT ?= 90          # x2 seconds before giving up on the brain
+REUSE      ?= 0           # 1 = keep an already-running brain instead of restarting
+
 .DEFAULT_GOAL := help
 .PHONY: help setup setup-node setup-python setup-gpu packs dev build preview \
-        brain brain-cpu test check all-in clean clean-packs stop
+        brain brain-cpu start test check all-in clean clean-packs stop
 
 help:  ## show this help
 	@echo "MadFly Lab"
@@ -63,23 +71,82 @@ dev:  ## run the lab (see PORT below)
 	npm run dev -- --port $(PORT)
 
 brain:  ## Mode A server: all 176,422 neurons, GPU if available
-	cd python && $(abspath $(PY)) -m madfly_lab.server \
+	cd python && $(abspath $(PY)) -u -m madfly_lab.server \
 	  --cache-dir "$(abspath $(CACHE))" --circuit $(CIRCUIT) --device $(DEVICE)
 
 brain-cpu:  ## Mode A server, forced onto the CPU
 	$(MAKE) brain DEVICE=cpu
 
-all-in:  ## packs, then the Mode A server in the background, then the lab
-	$(MAKE) packs
-	@echo "starting Mode A server in the background (log: /tmp/madfly-brain.log)"
-	@cd python && nohup $(abspath $(PY)) -m madfly_lab.server \
-	  --cache-dir "$(abspath $(CACHE))" --circuit $(CIRCUIT) --device $(DEVICE) \
-	  > /tmp/madfly-brain.log 2>&1 & echo "  pid $$!"
-	@echo "  it takes ~60s to load; the lab falls back to a pack until it is up."
-	$(MAKE) dev
+start:  ## the whole lab: full-connectome brain + frontend, one command
+	@# Two things this does that matter:
+	@#
+	@# 1. CLEARS OLD PROCESSES FIRST. A server left from an earlier run is still
+	@#    serving whatever circuit and whatever CODE it started with, so edits to
+	@#    circuits.py or the server appear to do nothing and you debug the wrong
+	@#    binary. A stale vite also squats on the port. Both go.
+	@#    `make start REUSE=1` keeps a warm brain instead (saves the ~90s load);
+	@#    only do that when you have not touched the Python side.
+	@#
+	@# 2. WAITS for the brain before starting the frontend. `auto` mode gives a
+	@#    Mode A server only a few seconds before falling back to an in-tab
+	@#    pack, and the full connectome needs ~60-90s to load, so starting them
+	@#    together would silently hand you the small brain every time.
+	@set -e; \
+	$(MAKE) --no-print-directory stop; \
+	if [ "$(REUSE)" = "1" ] && ss -ltn 2>/dev/null | grep -q ':$(BRAIN_PORT)'; then \
+	  echo "Mode A server already running on :$(BRAIN_PORT) -- reusing it."; \
+	  started=0; \
+	else \
+	  test -d "$(CACHE)" || { \
+	    echo "CACHE not found: $(CACHE)"; \
+	    echo "  make start CACHE=/path/to/.cache"; exit 1; }; \
+	  echo "Starting the full connectome (log: $(BRAIN_LOG))"; \
+	  ( cd python && nohup $(abspath $(PY)) -u -m madfly_lab.server \
+	      --cache-dir "$(abspath $(CACHE))" --circuit $(CIRCUIT) --device $(DEVICE) \
+	      > $(BRAIN_LOG) 2>&1 & echo $$! > $(BRAIN_PID) ); \
+	  started=1; \
+	  printf "  loading 176,422 neurons"; \
+	  for i in $$(seq 1 $(BRAIN_WAIT)); do \
+	    if grep -q "server on" $(BRAIN_LOG) 2>/dev/null; then break; fi; \
+	    if grep -qE "Traceback|Error:" $(BRAIN_LOG) 2>/dev/null; then \
+	      echo; echo "  server failed to start:"; tail -15 $(BRAIN_LOG); exit 1; fi; \
+	    printf "."; sleep 2; \
+	  done; echo; \
+	  if grep -q "server on" $(BRAIN_LOG) 2>/dev/null; then \
+	    grep -E "device:|step cost" $(BRAIN_LOG) | sed 's/^/ /'; \
+	    echo "  brain ready on ws://localhost:$(BRAIN_PORT)"; \
+	  else \
+	    echo "  still not ready after $$(( $(BRAIN_WAIT) * 2 ))s -- the lab will"; \
+	    echo "  fall back to an in-tab pack. Check $(BRAIN_LOG)."; \
+	  fi; \
+	fi; \
+	if [ "$$started" = "1" ]; then \
+	  trap 'echo; echo "stopping the brain"; kill $$(cat $(BRAIN_PID)) 2>/dev/null || true; rm -f $(BRAIN_PID)' EXIT INT TERM; \
+	fi; \
+	echo; echo "Lab -> http://localhost:$(PORT)"; echo; \
+	npm run dev -- --port $(PORT)
 
-stop:  ## stop a backgrounded Mode A server
-	-pkill -f madfly_lab.server && echo "stopped" || echo "none running"
+all-in: packs start  ## rebuild packs first, then `start`
+
+stop:  ## stop any running brain and frontend
+	@# Prefer the PID file written by `start`. A `pkill -f <pattern>` here is a
+	@# trap: the pattern appears in this recipe's own command line, so pkill
+	@# matches the shell running it and make hangs killing itself. The pgrep
+	@# fallback below is anchored to the interpreter path and excludes this
+	@# shell, for servers started before the PID file existed.
+	@if [ -f $(BRAIN_PID) ] && kill -0 $$(cat $(BRAIN_PID)) 2>/dev/null; then \
+	  kill $$(cat $(BRAIN_PID)) 2>/dev/null || true; \
+	  echo "  stopped the Mode A server"; \
+	else \
+	  pids=$$(pgrep -f '[.]venv/bin/python .*madfly.lab[.]server' 2>/dev/null \
+	          | grep -vw "$$$$" || true); \
+	  if [ -n "$$pids" ]; then kill $$pids 2>/dev/null || true; \
+	    echo "  stopped the Mode A server"; fi; \
+	fi
+	@pids=$$(pgrep -f '[n]ode_modules/[.]bin/vite' 2>/dev/null | grep -vw "$$$$" || true); \
+	  if [ -n "$$pids" ]; then kill $$pids 2>/dev/null || true; \
+	    echo "  stopped the frontend"; fi
+	@rm -f $(BRAIN_PID)
 
 # ---- checks ---------------------------------------------------------------
 
