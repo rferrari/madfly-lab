@@ -73,6 +73,8 @@ class LabBrainRuntime:
         self.dtype = self.adjacency.dtype if self.adjacency.dtype.kind == "f" else np.float32
         # Channel index arrays must live on the same device as the activations,
         # or cupy refuses the fancy-index gather in read()/set_input().
+        # to_device() returns already-resident arrays untouched, so when the
+        # server hands over a shared device-side channel index this is free.
         self._dev_channels = {k: self.backend.to_device(v) for k, v in self.channels.items()}
         self.reset()
 

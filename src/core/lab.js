@@ -38,7 +38,7 @@ export class MadFlyLab {
   constructor({
     canvas = '#app-canvas',
     mode = 'pruned-subgraph',
-    circuit = 'courtship-and-foraging',
+    circuit = 'courtship',
     packUrl = null,
     serverUrl = 'ws://localhost:8770',
     brainHz = 60,
@@ -310,7 +310,7 @@ export class MadFlyLab {
         // The 'full' circuit IS Mode A -- there is no pack for it. Requesting
         // it connects to the server; everything else loads a local pack.
         mode: wantsModeA ? 'full-connectome' : 'pruned-subgraph',
-        circuit: wantsModeA ? (this._serverCircuit ?? 'courtship-and-foraging') : name,
+        circuit: wantsModeA ? (this._serverCircuit ?? 'courtship') : name,
         tickHz: this.brainHz,
         noise,
         serverUrl,
@@ -325,7 +325,7 @@ export class MadFlyLab {
           const started = performance.now();
           const poll = () => {
             if (this.brain.runtime?.ready) return res(true);
-            if (performance.now() - started > 7000) return res(false);
+            if (performance.now() - started > 15000) return res(false);
             setTimeout(poll, 100);
           };
           poll();

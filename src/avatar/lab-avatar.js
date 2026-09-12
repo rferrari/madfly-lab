@@ -95,7 +95,12 @@ export class LabAvatar {
     maxSpeed = 6.0,
     escapeImpulse = 5.0,
     /** Calibrated DNp06 above which the fly stops to feed. */
-    feedThreshold = 0.5,
+    /** Rise in DNp06 above its resting level that counts as "this is food". */
+    feedThreshold = 0.12,
+    /** Klinokinesis: turn when an odour gradient falls. Engineered, see act(). */
+    chemotaxis = true,
+    chemotaxisGain = 1.9,
+    chemotaxisFloor = 0.02,
     bounds = 38,
     seed = null,
   } = {}) {
@@ -113,6 +118,11 @@ export class LabAvatar {
     this.escapeImpulse = escapeImpulse;
     this.feedThreshold = feedThreshold;
     this.feeding = false;
+    this.chemotaxis = chemotaxis;
+    this.chemotaxisGain = chemotaxisGain;
+    this.chemotaxisFloor = chemotaxisFloor;
+    this.odourTurn = 0;
+    this._castSign = 0;
 
     this.visionEnabled = vision;
     // One retina and one looming detector PER EYE. The connectome's LC4/LPLC1/
@@ -137,10 +147,13 @@ export class LabAvatar {
     /** Displayed touch level (HUD + body flash). The neural pulse is separate. */
     this.touchDrive = 0;
     this._pendingTouch = 0;
+    this.odourTurn = 0;
+    this._castSign = 0;
 
     // Last sensed values, exposed for the HUD and for scenes.
     this.sensors = {
-      left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0, scent: new Map(),
+      left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0,
+      odour: 0, odourDelta: 0, scent: new Map(),
     };
     this.motor = { steer: 0, forward: 0, escape: 0, feeding: 0 };
     this.escapeUntil = 0;
@@ -285,6 +298,29 @@ export class LabAvatar {
     this.olfaction.sample(scent, this.position);
     this.olfaction.drive(brain);
     this.sensors.scent = this.olfaction.intensities;
+
+    // Klinokinesis, computed here and applied in act(). See the comment there
+    // for why this is engineered rather than read from the connectome.
+    if (this.chemotaxis) {
+      const best = this.olfaction.strongest();
+      const delta = best.channel ? (this.olfaction.deltas.get(best.channel) ?? 0) : 0;
+      this.sensors.odour = best.intensity;
+      this.sensors.odourDelta = delta;
+      if (best.intensity > this.chemotaxisFloor) {
+        // Falling gradient -> cast about; rising -> hold course. The sign is
+        // kept across ticks so a cast is a sustained arc, not a jitter.
+        if (delta < -1e-5) {
+          if (this._castSign === 0) this._castSign = Math.random() < 0.5 ? -1 : 1;
+          this.odourTurn = this._castSign * this.chemotaxisGain;
+        } else {
+          this._castSign = 0;
+          this.odourTurn = 0;
+        }
+      } else {
+        this._castSign = 0;
+        this.odourTurn = 0;
+      }
+    }
   }
 
   /**
@@ -311,7 +347,10 @@ export class LabAvatar {
     // graph as the strongest 2-hop target of gustatory input. When it is
     // driving, the fly stops walking and feeds. This is what makes it halt at a
     // food bowl instead of strolling over the top of it.
-    const feeding = brain.readCalibrated('DNp06');
+    // PHASIC, not absolute: DNp06 rests around 0.37 even with no food in the
+    // arena, so an absolute threshold froze the fly in a permanent meal. What
+    // matters is that it ROSE when the fly touched something edible.
+    const feeding = brain.readPhasic('DNp06');
 
     this.motor.steer = steer;
     this.motor.forward = forward;
@@ -325,6 +364,21 @@ export class LabAvatar {
       const away = this.sensors.loomR > this.sensors.loomL ? -1 : 1;
       this.yaw += away * 1.1;
       this.speed = this.escapeImpulse;
+    } else if (this.chemotaxis && this.odourTurn !== 0) {
+      // Klinokinesis: turn when the odour gradient is FALLING, go straight when
+      // it is rising. This is how a real fly finds a smell it cannot localize
+      // -- and it cannot localize this one: the ORN populations in male-cns
+      // carry no left/right soma annotation at all (every one is '?'), so there
+      // is no bilateral comparison to read out of the connectome. The turn is
+      // therefore ENGINEERED at the body, not derived from the brain; what
+      // comes from the real neurons is the odour intensity driving it.
+      //
+      // Without it the fly walked past every station and into the wall: smell
+      // reached DNp09 (forward) but nothing steered, so a gradient could make
+      // it hurry, never aim.
+      this.yaw += this.odourTurn * dt;
+      const drive = Math.max(0, forward) * this.speedGain;
+      this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     } else if (this.feeding) {
       // Feeding suppresses locomotion. Real DNp06 drive, engineered gate.
       this.speed += (0 - this.speed) * Math.min(1, dt * 6);

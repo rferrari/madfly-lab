@@ -38,8 +38,27 @@ class Backend:
     def is_gpu(self) -> bool:
         return self.name == "gpu"
 
+    def is_on_device(self, array) -> bool:
+        """True if `array` already lives on this backend."""
+        if not self.is_gpu:
+            return not hasattr(array, "get")      # cupy arrays expose .get()
+        return type(array).__module__.startswith(("cupy", "cupyx"))
+
     def to_device(self, array):
-        """Move a numpy array (or scipy sparse matrix) onto this backend."""
+        """Move a numpy array (or scipy sparse matrix) onto this backend.
+
+        Returns an array that is ALREADY on this device untouched. That check is
+        load-bearing, not defensive: the Mode A server builds one runtime per
+        connected client over the same shared adjacency, and without it every
+        new session re-uploaded the full 206MB CSR matrix to the GPU. The
+        upload blocked the event loop long enough that a client's handshake
+        took 13.6 seconds, `mode: auto` timed out, and the browser fell back to
+        a pruned pack with a perfectly healthy GPU server running. It also
+        capped concurrent sessions at whatever fraction of VRAM 206MB divides
+        into.
+        """
+        if self.is_on_device(array):
+            return array
         if not self.is_gpu:
             return array
         if sp.issparse(array):

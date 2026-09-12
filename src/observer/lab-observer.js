@@ -71,6 +71,14 @@ export class LabObserver {
       this.somaCloud = new SomaCloud(
         this.cloudCanvas, lab.brain.pack ?? lab.brain.runtime,
       );
+      // Mode A fetches soma coordinates after the handshake, so the cloud may
+      // be built empty and has to be rebuilt when they land.
+      if (!lab.brain.pack && lab.brain.runtime) {
+        lab.brain.runtime.onSoma = (rt) => {
+          this.somaCloud = new SomaCloud(this.cloudCanvas, rt);
+          this.setCloudView(this.somaCloud.view);
+        };
+      }
       // View buttons: rotate / front / left / right / top.
       // Zoom sits top-right, overlaid on the canvas; view buttons run along the
       // bottom. Keeps the two kinds of control visually separate.

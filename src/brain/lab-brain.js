@@ -34,7 +34,7 @@ export const AUTO_PROBE_MS = 6000;
 export class LabBrain {
   constructor({
     mode = 'pruned-subgraph',
-    circuit = 'courtship-and-foraging',
+    circuit = 'courtship',
     packUrl = null,
     serverUrl = 'ws://localhost:8770',
     tickHz = 60,
@@ -56,6 +56,7 @@ export class LabBrain {
     this._signalState = new Map();
     this._loomState = new Map();
     this._steerBaseline = new Map();
+    this._phasicBaseline = new Map();
   }
 
   get mode() { return this.runtime ? this.runtime.mode : this.requestedMode; }
@@ -167,6 +168,7 @@ export class LabBrain {
   reset(noiseScale = this.noise) {
     this.runtime?.reset(noiseScale);
     this._steerBaseline.clear();
+    this._phasicBaseline.clear();
     return this;
   }
 
@@ -242,7 +244,28 @@ export class LabBrain {
   }
 
   /** Forget adapted steering baselines (on reset / re-mint). */
-  resetSteering() { this._steerBaseline.clear(); return this; }
+  resetSteering() { this._steerBaseline.clear(); this._phasicBaseline.clear(); return this; }
+
+  /**
+   * PHASIC read: how far a channel has risen above its own recent resting
+   * level, rather than its absolute value.
+   *
+   * Every channel here has a nonzero baseline -- the network is never silent,
+   * because all the sensory populations are being driven by something. So an
+   * absolute threshold is a trap, and it caught me twice: DNa01's standing
+   * asymmetry curved the fly permanently, and DNp06 rests around 0.37, so a
+   * 0.36 "is it feeding?" threshold left the fly frozen in a permanent meal in
+   * the middle of an empty arena, nowhere near any food.
+   *
+   * What a behavioural gate actually wants to know is whether a signal went UP
+   * when something happened. That is this.
+   */
+  readPhasic(channel, { adaptRate = 0.004 } = {}) {
+    const v = this.readCalibrated(channel);
+    const prev = this._phasicBaseline.get(channel) ?? v;
+    this._phasicBaseline.set(channel, prev + (v - prev) * adaptRate);
+    return v - prev;
+  }
 
   populationActivity() { return this.runtime ? this.runtime.populationActivity() : 0; }
 

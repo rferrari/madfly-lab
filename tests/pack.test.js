@@ -23,7 +23,7 @@ function load(name) {
 }
 
 const minimal = load('minimal');
-const courtship = load('courtship-and-foraging');
+const courtship = load('courtship');
 const skip = minimal ? false : 'packs not built -- run `npm run pack`';
 
 describe('mflpack format', { skip }, () => {

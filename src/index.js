@@ -7,7 +7,7 @@
  *     const lab = new MadFlyLab({
  *       mode: 'pruned-subgraph',
  *       canvas: '#app-canvas',
- *       circuit: 'courtship-and-foraging',
+ *       circuit: 'courtship',
  *     });
  *
  *     lab.addStation(new Station.FoodBowl({

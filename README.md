@@ -254,16 +254,6 @@ Read [AGENTS.md](AGENTS.md) before extending it.
 
 ---
 
-## Lineage
-
-MadFly Lab generalizes machinery proven across the sibling projects in this repo
-family: the connectome loader and `tanh` bridge from `fly_simulation` →
-`fly_simulation_3d` → `fly_drone_delivery` → `fly_speed_dating`, the weighted
-pruning from `fly_speed_dating`'s courtship cache, and the hex retina and motion
-opponency from `duckfly`. Each was vendored rather than depended on, following
-the same convention those projects use for the same reason: they deploy
-standalone.
-
 ## License & attribution
 
 Code **Apache-2.0**. Connectome data **CC BY 4.0** — MaleCNS v1.0, FlyEM/HHMI

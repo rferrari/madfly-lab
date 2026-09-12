@@ -93,6 +93,9 @@ class LabSession:
         elif op == "reset":
             self.runtime.reset(noise_scale=float(msg.get("noise", 0.0)))
             self.t = 0.0
+        elif op == "soma":
+            # Answered out-of-band, after the client is up and rendering.
+            return "soma"
         elif op == "subscribe":
             requested = msg.get("channels")
             if requested is not None:
@@ -169,8 +172,13 @@ async def _handle(ws, shared):
             "source": shared["source"],
             "channels": {k: int(len(v)) for k, v in shared["channels"].items()},
             "reference": shared["reference"],
-            "somaB64": shared["soma_b64"],
-            "somaQuant": shared["soma_quant"],
+            # The 1.4MB soma cloud is NOT in the handshake. It used to be, and
+            # on the browser side it competes with the render loop for the main
+            # thread: Python saw `ready` in 0.14s while the page took 10.2s for
+            # the same frame, long enough that circuit-switching gave up and
+            # fell back to a pruned pack. The client asks for it separately once
+            # it is running, so mode detection stays instant.
+            "somaAvailable": True,
         }))
 
         dt = 1.0 / tick_hz
@@ -181,7 +189,12 @@ async def _handle(ws, shared):
         async def pump():
             async for raw_msg in ws:
                 try:
-                    session.apply(json.loads(raw_msg))
+                    if session.apply(json.loads(raw_msg)) == "soma":
+                        await ws.send(json.dumps({
+                            "op": "soma",
+                            "somaB64": shared["soma_b64"],
+                            "somaQuant": shared["soma_quant"],
+                        }))
                 except Exception as e:  # one bad frame must not kill the session
                     await ws.send(json.dumps({"op": "error", "message": str(e)}))
 
@@ -302,9 +315,18 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str,
     print(f"  soma cloud: {int(valid.sum())} positioned neurons, "
           f"{len(soma_b64) / 1e6:.1f}MB base64 at handshake.")
 
+    # Upload ONCE, here, and share the device-resident matrix across every
+    # session. Each client gets its own activation vector (a few hundred KB)
+    # but never its own copy of the graph.
+    W_dev = backend.to_device(W)
+    channels_dev = {k: backend.to_device(v) for k, v in channels.items()}
+    if backend.is_gpu:
+        free_after, _ = backend.xp.cuda.runtime.memGetInfo()
+        print(f"  graph resident on GPU; {free_after / 1e9:.1f}GB still free.")
+
     print("  ready.")
     return {
-        "adjacency": W, "channels": channels, "n": c.n_sm,
+        "adjacency": W_dev, "channels": channels_dev, "n": c.n_sm,
         "soma_b64": soma_b64, "soma_quant": 8192.0,
         "nnz": int(c.sm_adjacency.nnz), "dataset": c.dataset, "source": c.source,
         "reference": reference, "backend": backend, "sessions": 0,

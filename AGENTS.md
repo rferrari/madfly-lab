@@ -233,8 +233,3 @@ Packs derive from the **MaleCNS v1.0** connectome, **CC BY 4.0** — FlyEM/HHMI
 Janelia, University of Cambridge, MRC Laboratory of Molecular Biology, and
 Google Research. Attribution ships inside every `.mflpack` header
 (`license`, `citation`).
-
-Deliberately *not* used: the FlyWire-derived assets in the sibling `duckfly`
-project, which are CC BY-NC 4.0. Keeping to MaleCNS means nothing this framework
-generates carries a non-commercial restriction. Do not introduce FlyWire-derived
-data without flagging the license change.

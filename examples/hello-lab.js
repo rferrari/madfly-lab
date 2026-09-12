@@ -27,8 +27,9 @@ const lab = new MadFlyLab({
   // scene works either way. Force it with ?mode=pruned-subgraph or
   // ?mode=full-connectome. Start the server with `npm run brain:full`.
   mode: params.get('mode') ?? 'auto',
-  circuit: params.get('circuit') ?? 'courtship-and-foraging',
+  circuit: params.get('circuit') ?? 'courtship',
   camera: 'chase',
+  arenaSize: 26,
   avatarOptions: { seed: params.get('seed') ?? undefined },
 });
 
@@ -79,7 +80,9 @@ lab.addStation(new Station.Mate({
     : 'courtship: DNp13 fell back below threshold'),
 }));
 
-lab.arrangeInRing(11);
+// A tight ring keeps the fly inside the experiment. At radius 11 in a 40-unit
+// arena it simply walked out between the stations and hit the wall.
+lab.arrangeInRing(8);
 
 // Real Giant Fiber escape. DNp01 firing is the fly deciding to leave.
 lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), { threshold: 0.5 });
@@ -92,7 +95,7 @@ const boot = (pct, label) => window.__madflyBoot?.(pct, label);
 boot(12, 'BUILDING ARENA…');
 lab.brain.onReady = () => boot(74, 'CONNECTOME LOADED');
 
-boot(22, `LOADING <b>${(params.get('circuit') ?? 'courtship-and-foraging').toUpperCase()}</b>`);
+boot(22, `LOADING <b>${(params.get('circuit') ?? 'courtship').toUpperCase()}</b>`);
 await lab.start();
 boot(94, `<b>${lab.brain.nNeurons.toLocaleString()}</b> REAL NEURONS ONLINE`);
 log(`minted ${lab.avatar.identity.name}  ·  seed ${lab.avatar.identity.seed}`);

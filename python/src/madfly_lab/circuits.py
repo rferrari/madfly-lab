@@ -142,8 +142,8 @@ _CORE_OUTPUTS = {**_MOTOR, **_FEEDING}
 
 
 CIRCUITS = {
-    "escape-and-steering": Circuit(
-        name="escape-and-steering",
+    "escape": Circuit(
+        name="escape",
         description=(
             "Looming vision to escape/steering motor output: LC4/LPLC2/LPLC1 -> "
             "DNp01 (Giant Fiber), DNp03, DNa01, DNp09. The smallest useful "
@@ -159,8 +159,8 @@ CIRCUITS = {
         hops=1,
         top_k=3,
     ),
-    "dopamine-mushroom-body": Circuit(
-        name="dopamine-mushroom-body",
+    "dopamine": Circuit(
+        name="dopamine",
         description=(
             "Reward/punishment learning substrate: ORN glomeruli -> KC -> MBON, "
             "modulated by real PAM (reward) and PPL1 (aversive) dopaminergic "
@@ -180,8 +180,8 @@ CIRCUITS = {
         hops=1,
         top_k=3,
     ),
-    "courtship-and-foraging": Circuit(
-        name="courtship-and-foraging",
+    "courtship": Circuit(
+        name="courtship",
         description=(
             "The spec's default: pheromone (DA1/DA2) and food-odor (DM1/VA6) "
             "input into the pC1/aSP courtship hub and the mushroom body, out to "

@@ -37,12 +37,12 @@ export class FoodBowl extends Station {
     this.nutrition = opts.nutrition ?? 1;
     this.consumed = 0;
     /** Contact radius for taste -- smaller than the scent field on purpose. */
-    this.tasteRadius = opts.tasteRadius ?? 1.4;
+    this.tasteRadius = opts.tasteRadius ?? 1.9;
     // Measured: the taste population is 1,428 real cells and setInput splits
     // drive across them, so a nominal 1.0 barely moves DNp06. Calibrated
     // against the real pathway -- taste 8 puts DNp06 at 0.499 (right on the
     // feeding threshold), 12 at 0.673 (a clear stop).
-    this.tasteStrength = opts.tasteStrength ?? 12.0;
+    this.tasteStrength = opts.tasteStrength ?? 18.0;
     this._tasting = false;
     this.onTaste = opts.onTaste ?? null;
     this.color = opts.color ?? THEME.lime;

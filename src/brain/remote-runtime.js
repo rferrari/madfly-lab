@@ -34,6 +34,8 @@ export class RemoteRuntime {
     this.achievedHz = 0;
     this.somaXYZ = null;
     this.somaCount = 0;
+    this._somaPending = false;
+    this.onSoma = null;
     this.subscribeCloud = false;
 
     this._ws = null;
@@ -58,21 +60,16 @@ export class RemoteRuntime {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.op === 'ready') {
-        // Decode the soma positions the server ships once at handshake. Mode B
-        // gets these from the pack; Mode A has no pack, and without them the
-        // brain panel would be empty in exactly the mode where the whole brain
-        // is what you came to see.
-        if (msg.somaB64) {
-          const raw = Uint8Array.from(atob(msg.somaB64), (ch) => ch.charCodeAt(0));
-          const q = new Int16Array(raw.buffer, raw.byteOffset, raw.byteLength / 2);
-          const inv = 1 / (msg.somaQuant ?? 8192);
-          this.somaXYZ = new Float32Array(q.length);
-          for (let i = 0; i < q.length; i++) this.somaXYZ[i] = q[i] * inv;
-          this.somaCount = this.somaXYZ.length / 3;
-          delete msg.somaB64;      // 1MB string; no reason to retain it
-        }
         this.info = msg;
         this.ready = true;
+        // Ask for the soma cloud AFTER the handshake, not in it. Shipping the
+        // 1.4MB payload inside `ready` made the browser take 10.2s to reach
+        // this line (Python saw the same frame in 0.14s) because decoding it
+        // competes with the render loop, and callers waiting on `ready` to
+        // decide whether a server exists timed out and fell back.
+        if (msg.somaAvailable) setTimeout(() => this.requestSoma(), 250);
+      } else if (msg.op === 'soma') {
+        this._decodeSoma(msg);
       } else if (msg.op === 'tick') {
         this.t = msg.t;
         this.achievedHz = msg.achievedHz ?? this.achievedHz;
@@ -114,6 +111,25 @@ export class RemoteRuntime {
 
   _send(msg) {
     if (this._ws && this._ws.readyState === WebSocket.OPEN) this._ws.send(JSON.stringify(msg));
+  }
+
+  /** Ask the server for soma coordinates (Mode A has no pack to read them from). */
+  requestSoma() {
+    if (this.somaXYZ || this._somaPending) return;
+    this._somaPending = true;
+    this._send({ op: 'soma' });
+  }
+
+  _decodeSoma(msg) {
+    if (!msg.somaB64) return;
+    const raw = Uint8Array.from(atob(msg.somaB64), (ch) => ch.charCodeAt(0));
+    const q = new Int16Array(raw.buffer, raw.byteOffset, raw.byteLength / 2);
+    const inv = 1 / (msg.somaQuant ?? 8192);
+    this.somaXYZ = new Float32Array(q.length);
+    for (let i = 0; i < q.length; i++) this.somaXYZ[i] = q[i] * inv;
+    this.somaCount = this.somaXYZ.length / 3;
+    this._somaPending = false;
+    this.onSoma?.(this);
   }
 
   setInput(channel, intensity) { this._send({ op: 'input', channel, intensity }); }

@@ -13,19 +13,19 @@
  * visual channels, so the fly simply stood still with no error anywhere.
  */
 export const CIRCUITS = {
-  'courtship-and-foraging': {
+  'courtship': {
     label: 'Courtship & foraging',
     neurons: 6748,
     description: 'The default. Core plus the pC1/aSP courtship hub, DNp13 '
       + '(copulation attempt) and the dopaminergic populations.',
   },
-  'escape-and-steering': {
+  'escape': {
     label: 'Escape & steering',
     neurons: 5833,
     description: 'Core with depth on the looming-to-escape pathway: '
       + 'LC4/LPLC1/LPLC2 into DNp01 (Giant Fiber) and DNp03.',
   },
-  'dopamine-mushroom-body': {
+  'dopamine': {
     label: 'Dopamine & mushroom body',
     neurons: 6378,
     description: 'Core plus the learning substrate: ORN into Kenyon cells into '
