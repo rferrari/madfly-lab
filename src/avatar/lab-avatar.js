@@ -30,6 +30,7 @@ import { CompoundEye } from './retina.js';
 import { LoomingDetector } from './motion.js';
 import { OlfactoryReceptors } from './olfaction.js';
 import { THEME } from '../core/theme.js';
+import { AVATAR_LAYER } from '../core/arena.js';
 import { mintFly } from './mint.js';
 
 /**
@@ -187,6 +188,12 @@ export class LabAvatar {
 
     group.scale.setScalar(id.scale);
     group.position.copy(this.position);
+
+    // Everything the fly is made of goes on the avatar layer, which the eye
+    // cameras do not render. Applied to every descendant, since layers are
+    // per-object and not inherited.
+    group.traverse((o) => o.layers.set(AVATAR_LAYER));
+
     this.object3D = group;
     return group;
   }
@@ -212,8 +219,11 @@ export class LabAvatar {
    * Sample the world into the brain's real sensory channels.
    * Called by the lab before `brain.step()`.
    */
-  sense(brain, { eyePixels, scent, time }) {
-    if (this.visionEnabled && eyePixels) {
+  sense(brain, { eyePixels, scent, time, visionFresh = true }) {
+    // Only re-process vision on a genuinely new frame. The looming detector
+    // measures motion between successive frames; feeding it a repeat makes it
+    // read zero motion and reset its persistence counter. See Lab._loop.
+    if (this.visionEnabled && eyePixels && visionFresh) {
       // eyePixels is {L, R} from Arena.renderEyes; a bare frame (the old
       // single-eye call) is treated as both eyes seeing the same thing.
       const frames = eyePixels.L ? eyePixels : { L: eyePixels, R: eyePixels };

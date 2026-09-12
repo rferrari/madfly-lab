@@ -31,6 +31,9 @@ export class RemoteRuntime {
     this.population = 0;
     this.t = 0;
     this.cloud = null;
+    this.achievedHz = 0;
+    this.somaXYZ = null;
+    this.somaCount = 0;
     this.subscribeCloud = false;
 
     this._ws = null;
@@ -55,10 +58,24 @@ export class RemoteRuntime {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.op === 'ready') {
+        // Decode the soma positions the server ships once at handshake. Mode B
+        // gets these from the pack; Mode A has no pack, and without them the
+        // brain panel would be empty in exactly the mode where the whole brain
+        // is what you came to see.
+        if (msg.somaB64) {
+          const raw = Uint8Array.from(atob(msg.somaB64), (ch) => ch.charCodeAt(0));
+          const q = new Int16Array(raw.buffer, raw.byteOffset, raw.byteLength / 2);
+          const inv = 1 / (msg.somaQuant ?? 8192);
+          this.somaXYZ = new Float32Array(q.length);
+          for (let i = 0; i < q.length; i++) this.somaXYZ[i] = q[i] * inv;
+          this.somaCount = this.somaXYZ.length / 3;
+          delete msg.somaB64;      // 1MB string; no reason to retain it
+        }
         this.info = msg;
         this.ready = true;
       } else if (msg.op === 'tick') {
         this.t = msg.t;
+        this.achievedHz = msg.achievedHz ?? this.achievedHz;
         this.population = msg.population;
         for (const [k, v] of Object.entries(msg.readings)) this.readings.set(k, v);
         if (msg.cloud) this.cloud = msg.cloud;

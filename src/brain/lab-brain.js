@@ -28,6 +28,9 @@ import { RemoteRuntime } from './remote-runtime.js';
 /** Display-only: map a tanh activation in [-1,1] onto the HUD's 0-200 Hz dial. */
 export const HZ_PER_ACTIVATION = 200;
 
+/** How long `mode: 'auto'` waits for a Mode A server before falling back. */
+export const AUTO_PROBE_MS = 6000;
+
 export class LabBrain {
   constructor({
     mode = 'pruned-subgraph',
@@ -68,10 +71,17 @@ export class LabBrain {
       const remote = new RemoteRuntime({
         url: this.serverUrl, circuit: this.circuit, tickHz: this.tickHz,
       }).connect();
-      const up = await waitFor(() => remote.ready, 1200);
+      // Generous, because this is a one-off at startup behind a loading screen
+      // and the cost of being wrong is silently running the small brain. The
+      // Mode A handshake takes ~1.7s locally (socket + first GPU sync); the
+      // original 1200ms budget expired just before `ready` arrived and 'auto'
+      // fell back to Mode B every time with a live server sitting right there.
+      const up = await waitFor(() => remote.ready, AUTO_PROBE_MS);
       if (up) {
         this.runtime = remote;
       } else {
+        console.info(`[MadFlyLab] no Mode A server on ${this.serverUrl} after `
+          + `${AUTO_PROBE_MS}ms — using the in-tab pruned pack.`);
         remote.close();
         this.runtime = await this._loadPruned();
       }
@@ -131,6 +141,26 @@ export class LabBrain {
   }
 
   clearInputs() { this.runtime?.clearInputs(); return this; }
+
+  /**
+   * Lesion a population -- silence it while leaving it wired in place.
+   * See PrunedRuntime.silence. A no-op on runtimes that cannot lesion.
+   */
+  silence(...channels) {
+    for (const c of channels) this.runtime?.silence?.(c);
+    return this;
+  }
+
+  unsilence(...channels) {
+    for (const c of channels) this.runtime?.unsilence?.(c);
+    return this;
+  }
+
+  clearSilenced() { this.runtime?.clearSilenced?.(); return this; }
+
+  get silencedChannels() {
+    return [...(this.runtime?.silencedChannels ?? [])];
+  }
 
   reset(noiseScale = this.noise) { this.runtime?.reset(noiseScale); return this; }
 

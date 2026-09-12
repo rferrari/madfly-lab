@@ -5,6 +5,9 @@
  * family; see THIRD_PARTY_NOTICES.md), with the fixed 96x64 / radius-15 map
  * generalized into a constructor so a scene can trade acuity for frame time.
  *
+ * Frames are expected in WebGL buffer orientation (origin bottom-left), which
+ * is what `readRenderTargetPixels` produces -- see the tap computation.
+ *
  * A real Drosophila eye has ~700-800 ommatidia per side, so the default radius
  * 15 (721 hexagonal columns) is in the right range -- but the angular spacing
  * here is an engineering calibration, not a measured optical map, and the
@@ -86,7 +89,14 @@ export class CompoundEye {
       const y = Math.tan(cell.elevation * DEG) / tanHalf;
       const x = Math.tan(cell.azimuth * DEG) / (tanHalf * this.aspect);
       this.tap[cell.index * 2] = ((1 + x) * (width - 1)) / 2;
-      this.tap[cell.index * 2 + 1] = ((1 - y) * (height - 1)) / 2;
+      // NOTE THE SIGN. Frames come from WebGL's readRenderTargetPixels, whose
+      // origin is BOTTOM-left, not the top-left an image normally uses. The
+      // upstream formula ((1 - y) * ...) assumes top-left, which silently
+      // flipped the fly's whole visual field upside down: the lit floor landed
+      // in its UPPER ommatidia and stayed there as a permanent bright patch no
+      // matter what was actually in front of it. Positive elevation must map to
+      // a HIGH buffer row.
+      this.tap[cell.index * 2 + 1] = ((1 + y) * (height - 1)) / 2;
     }
   }
 

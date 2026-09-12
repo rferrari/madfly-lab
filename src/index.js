@@ -40,6 +40,7 @@ export { THEME, CSS } from './core/theme.js';
 
 export { LabAvatar } from './avatar/lab-avatar.js';
 export { mintFly } from './avatar/mint.js';
+export { PRESETS as GENOTYPES, resolveGenotype, describeGenotype } from './avatar/genotype.js';
 export { CompoundEye, fovForRetina } from './avatar/retina.js';
 export { LoomingDetector } from './avatar/motion.js';
 export { OlfactoryReceptors, OLFACTORY_CHANNELS } from './avatar/olfaction.js';
@@ -60,6 +61,7 @@ import { SlotMachine } from './stations/slot-machine.js';
 import { Screen } from './stations/screen.js';
 import { Workstation } from './stations/workstation.js';
 import { LightSwitch } from './stations/light-switch.js';
+import { Mate } from './stations/mate.js';
 import { FoodBowl } from './stations/food-bowl.js';
 import { HazardFan } from './stations/hazard-fan.js';
 
@@ -72,10 +74,11 @@ StationBase.SlotMachine = SlotMachine;
 StationBase.Screen = Screen;
 StationBase.Workstation = Workstation;
 StationBase.LightSwitch = LightSwitch;
+StationBase.Mate = Mate;
 StationBase.FoodBowl = FoodBowl;
 StationBase.HazardFan = HazardFan;
 
-export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch };
+export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch, Mate };
 export { makeFloorLabel, makeScreenTexture } from './core/label.js';
 
 /** Circuits the framework ships packs for. Mirrors python/src/madfly_lab/circuits.py. */

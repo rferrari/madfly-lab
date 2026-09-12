@@ -24,28 +24,43 @@ export class RetinalView {
     this._layout();
   }
 
+  /**
+   * Lay the panel out in the eye's ACTUAL angular coordinates.
+   *
+   * This must match retina.js exactly:
+   *     azimuth   = spacing * (u + v/2)
+   *     elevation = spacing * (sqrt(3)/2) * v
+   *
+   * It previously used `x ~ u, y ~ (v + u/2)`, a different shear -- so the
+   * panel drew a transposed picture of the visual field, and screen-down was
+   * also up. A broad band on the ground showed as a diagonal strip floating in
+   * the field, which looked exactly like a phantom object in front of the fly.
+   * The panel is a map of what the eye sees; it has to use the eye's own axes.
+   */
   _layout() {
     const { width, height } = this.canvas;
     const radius = this.eye.radius;
-    // Two fields side by side, so the panel shows what each eye sees
-    // separately -- which is the thing that actually drives steering.
     const columns = this.sides.length;
     const fieldW = width / columns;
-    // Flat-top hex packing: column pitch 1.5r, row pitch sqrt(3)r.
+
+    // Extent of the map in angular units, in the same shape the optics use.
+    const halfAz = radius;                       // max |u + v/2|
+    const halfEl = (Math.sqrt(3) / 2) * radius;  // max |(sqrt3/2) v|
     const cell = Math.min(
-      fieldW / ((radius * 2 + 2) * 1.5),
-      height / ((radius * 2 + 2) * Math.sqrt(3)),
+      (fieldW * 0.92) / (2 * halfAz + 2),
+      (height * 0.92) / (2 * halfEl + 1.2),
     );
     this.cell = cell;
     this.fieldW = fieldW;
     this.cx = fieldW / 2;
     this.cy = height / 2;
 
+    // Pointy-top hexagon, which is the cell shape that tiles this packing.
     this.hex = new Path2D();
     for (let i = 0; i < 6; i++) {
-      const a = (Math.PI / 3) * i;
-      const x = Math.cos(a) * cell * 0.95;
-      const y = Math.sin(a) * cell * 0.95;
+      const a = (Math.PI / 3) * i + Math.PI / 6;
+      const x = Math.cos(a) * cell * 0.62;
+      const y = Math.sin(a) * cell * 0.62;
       if (i === 0) this.hex.moveTo(x, y); else this.hex.lineTo(x, y);
     }
     this.hex.closePath();
@@ -67,8 +82,10 @@ export class RetinalView {
 
       for (const c of eye.cells) {
         const v = response ? response[c.index] : 0;
-        const x = originX + cell * 1.5 * c.u;
-        const y = cy + cell * Math.sqrt(3) * (c.v + c.u / 2);
+        // Same axes as the optics. Screen y is negated so POSITIVE elevation
+        // (looking up) draws upward, which it did not before.
+        const x = originX + cell * (c.u + c.v / 2);
+        const y = cy - cell * (Math.sqrt(3) / 2) * c.v;
         // Amber ramp: dark violet at 0, hot amber at 1.
         const r = Math.round(30 + v * 225);
         const g = Math.round(12 + v * 126);
@@ -91,6 +108,15 @@ export class RetinalView {
       ctx.fillStyle = CSS.dim;
       ctx.font = `9px ${CSS.font}`;
       ctx.fillText(side, i * fieldW + 5, canvas.height - 5);
+      // Horizon line: everything below it is ground. Makes it obvious at a
+      // glance whether the field is the right way up.
+      ctx.strokeStyle = 'rgba(154, 92, 255, 0.20)';
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(i * fieldW + 6, cy);
+      ctx.lineTo((i + 1) * fieldW - 6, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
     });
 
     if (this.sides.length > 1) {

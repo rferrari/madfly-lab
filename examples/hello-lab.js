@@ -14,15 +14,19 @@
  *     the eye that saw it and kicks the real DNp01 Giant Fiber.
  */
 
-import { MadFlyLab, Station, Triggers } from '../src/index.js';
+import { MadFlyLab, Station, Triggers, GENOTYPES } from '../src/index.js';
+
+let genotypeIndex = 0;
 
 const params = new URLSearchParams(location.search);
 
 const lab = new MadFlyLab({
   canvas: '#app-canvas',
-  // 'pruned-subgraph' runs here in the tab. 'full-connectome' needs
-  // `npm run brain:full`. 'auto' uses the server if it is up.
-  mode: params.get('mode') ?? 'pruned-subgraph',
+  // 'auto' uses the Mode A server (all 176,422 real neurons) when one is
+  // running and falls back to the in-tab pruned pack when it is not, so the
+  // scene works either way. Force it with ?mode=pruned-subgraph or
+  // ?mode=full-connectome. Start the server with `npm run brain:full`.
+  mode: params.get('mode') ?? 'auto',
   circuit: params.get('circuit') ?? 'courtship-and-foraging',
   camera: 'chase',
   avatarOptions: { seed: params.get('seed') ?? undefined },
@@ -65,13 +69,23 @@ lab.addStation(new Station.Workstation({
   onKey: Triggers.throttle(2, () => log('workstation: the fly is watching you type')),
 }));
 
+// 7. Mate -- the missing half of the courtship circuit. Nothing in the arena
+//    emitted on the real pheromone channels before this, so ORN_DA1 -> pC1/aSP
+//    -> DNp13 sat at rest no matter what the fly did.
+lab.addStation(new Station.Mate({
+  receptiveness: 1.0,
+  onCourtship: (v, m) => log(m.courting
+    ? `courtship: DNp13 ${v.toFixed(2)} — real copulation-attempt drive`
+    : 'courtship: DNp13 fell back below threshold'),
+}));
+
 lab.arrangeInRing(11);
 
 // Real Giant Fiber escape. DNp01 firing is the fly deciding to leave.
 lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), { threshold: 0.5 });
 
 // Poking the fly drives real tactile neurons.
-lab.onPoke(() => log('touch: poked → mechanosensory_tactile (2,558 real cells)'));
+lab.onPoke(() => log('poke: → mechanosensory_tactile (2,558 real cells)'));
 
 await lab.start();
 log(`minted ${lab.avatar.identity.name}  ·  seed ${lab.avatar.identity.seed}`);
@@ -85,8 +99,20 @@ addEventListener('keydown', (e) => {
     const fly = lab.mintNewFly();
     log(`minted ${fly.name}  ·  seed ${fly.seed}`);
   }
-  if (e.key === 't' || e.key === 'T') { lab.avatar.touch(1); log('touch: poked via keyboard'); }
+  if (e.key === 'p' || e.key === 'P') { lab.avatar.touch(1); log('poke: → mechanosensory_tactile'); }
   if (e.key === 'l' || e.key === 'L') lights.toggle();
+  if (e.key === 'b' || e.key === 'B') log(`brightness: ${lab.arena.cycleBrightness()}`);
+  if (e.key === 'v' || e.key === 'V') log(`brain view: ${lab.observer.cycleCloudView()}`);
+  if (e.key === '+' || e.key === '=') log(`brain zoom ${lab.observer.somaCloud?.zoom(1.25)}x`);
+  if (e.key === '-' || e.key === '_') log(`brain zoom ${lab.observer.somaCloud?.zoom(1 / 1.25)}x`);
+  // Shift+G cycles genotypes -- the "MadFly Dr" bench. Lesions apply live.
+  if (e.key === 'G') {
+    const names = Object.keys(GENOTYPES);
+    genotypeIndex = (genotypeIndex + 1) % names.length;
+    const fly = lab.mintNewFly(names[genotypeIndex]);
+    log(`${GENOTYPES[names[genotypeIndex]].label}: ${GENOTYPES[names[genotypeIndex]].description}`);
+    if (fly.requiresReload) log('…that genotype needs a different pack; reload with ?circuit= or ?mode=');
+  }
 });
 
 function log(msg) {

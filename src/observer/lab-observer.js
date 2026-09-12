@@ -12,6 +12,7 @@
  */
 
 import { CSS } from '../core/theme.js';
+import { describeGenotype } from '../avatar/genotype.js';
 import { RetinalView } from './retinal-view.js';
 import { SomaCloud } from './soma-cloud.js';
 import { Telemetry } from './telemetry.js';
@@ -23,7 +24,7 @@ const DEFAULT_TRACES = [
   { channel: 'PPL1', label: 'PPL1 aversive', color: CSS.red },
   { channel: 'DNp09', label: 'DNp09 forward', color: CSS.lime },
   { channel: 'DNa01', label: 'DNa01 steer', color: CSS.cyan, signed: true },
-  { channel: 'touch', label: 'touch (tactile)', color: CSS.amber },
+  { channel: 'touch', label: 'poke (tactile)', color: CSS.amber },
 ];
 
 export class LabObserver {
@@ -63,8 +64,37 @@ export class LabObserver {
 
     if (this.enabledPanels.includes('cloud')) {
       const panel = this._panel(root, 'BRAIN SOMA CLOUD');
+      this.cloudPanel = panel;
       this.cloudCanvas = this._canvas(panel, PANEL_W, 190);
-      this.somaCloud = new SomaCloud(this.cloudCanvas, lab.brain.pack);
+      // Mode B supplies a pack; Mode A supplies decoded soma positions.
+      this.somaCloud = new SomaCloud(
+        this.cloudCanvas, lab.brain.pack ?? lab.brain.runtime,
+      );
+      // View buttons: rotate / front / left / right / top.
+      const bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;gap:3px;margin-top:5px;pointer-events:auto';
+      this.viewButtons = {};
+      const mkBtn = (text, title, onClick, flex = 1) => {
+        const b = document.createElement('button');
+        b.textContent = text;
+        b.title = title;
+        b.style.cssText = `flex:${flex};background:transparent;color:${CSS.dim};`
+          + `border:1px solid ${CSS.border};border-radius:3px;font:9px ${CSS.font};`
+          + 'padding:2px 0;cursor:pointer';
+        b.onclick = onClick;
+        bar.appendChild(b);
+        return b;
+      };
+      for (const v of ['rotate', 'front', 'left', 'right', 'top']) {
+        this.viewButtons[v] = mkBtn(
+          v === 'rotate' ? '↻' : v[0].toUpperCase(), v, () => this.setCloudView(v),
+        );
+      }
+      mkBtn('−', 'zoom out', () => { this.somaCloud?.zoom(1 / 1.25); }, 0.7);
+      mkBtn('+', 'zoom in', () => { this.somaCloud?.zoom(1.25); }, 0.7);
+      panel.appendChild(bar);
+      this._highlightView('rotate');
+
       this.cloudNote = document.createElement('div');
       this.cloudNote.style.cssText = `color:${CSS.dim};font-size:9px;margin-top:4px`;
       panel.appendChild(this.cloudNote);
@@ -83,6 +113,26 @@ export class LabObserver {
       if (e.key === 'h' || e.key === 'H') this.toggle();
     });
     return this;
+  }
+
+  setCloudView(view) {
+    this.somaCloud?.setView(view);
+    this._highlightView(view);
+    return view;
+  }
+
+  cycleCloudView() {
+    const v = this.somaCloud?.cycleView();
+    if (v) this._highlightView(v);
+    return v;
+  }
+
+  _highlightView(active) {
+    for (const [v, b] of Object.entries(this.viewButtons ?? {})) {
+      const on = v === active;
+      b.style.color = on ? CSS.cyan : CSS.dim;
+      b.style.borderColor = on ? CSS.cyan : CSS.border;
+    }
   }
 
   /** Only trace channels this pack actually contains, so a smaller circuit
@@ -151,15 +201,24 @@ export class LabObserver {
 
     if (this.headerBody) {
       const scent = avatar.olfaction.strongest();
-      const modeLabel = brain.mode === 'full-connectome' ? 'MODE A · full connectome' : 'MODE B · pruned subgraph';
+      const remote = brain.runtime?.info;
+      const modeLabel = brain.mode === 'full-connectome'
+        ? `MODE A · full connectome${remote?.device ? ` · ${remote.device.toUpperCase()}` : ''}`
+        : 'MODE B · pruned subgraph · CPU';
       this.headerBody.innerHTML = [
         `<span style="color:${CSS.cyan}">${modeLabel}</span>`,
         `<span style="color:${CSS.dim}">circuit</span> ${brain.circuit}`,
+        lab.genotype
+          ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
+          : '',
         `<span style="color:${CSS.dim}">neurons</span> ${brain.nNeurons.toLocaleString()}`,
+        brain.mode === 'full-connectome' && brain.runtime?.readings
+          ? `<span style="color:${CSS.dim}">server</span> ${(brain.runtime.info?.deviceDetail ?? '').split(',')[0] || '—'} @ ${(brain.runtime.achievedHz ?? 0).toFixed(0)}Hz`
+          : '',
         `<span style="color:${CSS.dim}">stations</span> ${lab.stations.length}`,
         `<span style="color:${CSS.dim}">speed</span> ${avatar.speed.toFixed(2)} u/s`,
         `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">L ${avatar.sensors.loomL.toFixed(2)} R ${avatar.sensors.loomR.toFixed(2)}</span>`,
-        `<span style="color:${CSS.dim}">touch</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,`<span style="color:${CSS.dim}">click the fly to poke it</span>`,
+        `<span style="color:${CSS.dim}">poke</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`
           : `<span style="color:${CSS.dim}">scent</span> —`,

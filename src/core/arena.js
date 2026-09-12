@@ -24,10 +24,29 @@ export const CAMERA_MODES = ['orbit', 'chase', 'eye', 'top'];
  */
 export const EYE_SPLAY = (40 * Math.PI) / 180;
 
+/**
+ * Render layer holding the avatar's own body.
+ *
+ * The eye cameras are excluded from it, because a fly does not see its own
+ * head. It used to: the eye cameras sat at the body's centre, and the avatar's
+ * EMISSIVE eye spheres fell inside their downward field of view, painting a
+ * permanent bright blob into the retina. Worse, `mintFly` varies the body's
+ * scale (0.9-1.15) while the camera offsets are fixed, so re-minting changed
+ * how much of its own head the fly saw -- the retinal panel visibly changed
+ * when you minted a new fly with nothing else in the arena.
+ *
+ * Layer 0 is everything else. The main camera and the shadow casters are
+ * explicitly opted IN to this layer so the fly still renders and still casts a
+ * shadow; only the eye cameras are left out.
+ */
+export const AVATAR_LAYER = 1;
+
 /** Half the distance between the two eyes, in arena units. */
 export const EYE_SEPARATION = 0.18;
 /** Eye height above the avatar's origin. */
 export const EYE_HEIGHT = 0.35;
+/** How far forward of the body centre the eyes sit. */
+export const EYE_FORWARD = 0.5;
 
 export class Arena {
   constructor({ canvas, size = 40, eyeResolution = [96, 64], eyeFov = 90 } = {}) {
@@ -67,6 +86,7 @@ export class Arena {
 
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
     this.camera.position.set(0, this.size * 0.45, this.size * 0.6);
+    this.camera.layers.enable(AVATAR_LAYER);   // the viewer DOES see the fly
 
     // TWO compound eyes, because a fly has two and -- more to the point --
     // because the connectome's visual populations carry a real somaSide
@@ -113,7 +133,7 @@ export class Arena {
    * @param {boolean} on
    * @param {number} level  brightness when on, 0..1
    */
-  setLights(on, level = 1) {
+  setLights(on, level = this.brightnessLevel ?? 1) {
     this.lightsOn = !!on;
     const k = on ? level : 0;
     for (const { light, base } of this._switchable) light.intensity = base * k;
@@ -126,10 +146,50 @@ export class Arena {
 
   toggleLights() { return this.setLights(!this.lightsOn); }
 
+  /**
+   * Brightness presets, cycled with `cycleBrightness()`.
+   *
+   * 'dim' is the original mood lighting and is kept because it is a legitimate
+   * experimental condition -- a fly in near-darkness is a real thing to test --
+   * but it is no longer the default, because the visual pipeline needs contrast
+   * to work at all (see the spot lights above).
+   */
+  static BRIGHTNESS = { dim: 0.35, normal: 1.0, bright: 1.9, blazing: 3.2 };
+
+  setBrightness(name) {
+    const level = Arena.BRIGHTNESS[name];
+    if (level === undefined) {
+      throw new Error(`[MadFlyLab] unknown brightness "${name}". `
+        + `Known: ${Object.keys(Arena.BRIGHTNESS).join(', ')}`);
+    }
+    this.brightness = name;
+    this.brightnessLevel = level;
+    if (this.lightsOn) this.setLights(true, level);
+    return name;
+  }
+
+  /** Step to the next brightness preset and return its name. */
+  cycleBrightness() {
+    const names = Object.keys(Arena.BRIGHTNESS);
+    const next = names[(names.indexOf(this.brightness) + 1) % names.length];
+    return this.setBrightness(next);
+  }
+
+  /** How many lights the arena owns, and what they are. */
+  lightSummary() {
+    return this._switchable.map(({ light, base }) => ({
+      type: light.type,
+      baseIntensity: base,
+      current: +light.intensity.toFixed(2),
+    }));
+  }
+
   _buildLights() {
     // Tracked so setLights() can scale them without clobbering their ratios.
     this._switchable = [];
     this.lightsOn = true;
+    this.brightness = 'normal';
+    this.brightnessLevel = 1.0;
     const track = (light) => {
       this._switchable.push({ light, base: light.intensity });
       this.scene.add(light);
@@ -139,6 +199,30 @@ export class Arena {
     track(new THREE.AmbientLight(0xffffff, 0.55));
     track(new THREE.HemisphereLight(THEME.violet, THEME.void, 0.8));
 
+    // Three white overhead lab spots.
+    //
+    // Not just for looks: the looming detector computes Lucas-Kanade optical
+    // flow, and flow needs image GRADIENTS. In the original mood-lit arena --
+    // two coloured rim lights and nothing white -- there was too little
+    // contrast for the detector's four-sector test to ever agree, and loom
+    // measured exactly 0.000 at every distance from a hazard. Light is a
+    // sensory prerequisite here, not decoration.
+    this.spots = [0, 1, 2].map((i) => {
+      const a = (i / 3) * Math.PI * 2 + Math.PI / 6;
+      const spot = new THREE.SpotLight(0xffffff, 140, this.size * 2.2, Math.PI / 5, 0.45, 1.4);
+      spot.position.set(Math.cos(a) * this.size * 0.42, 16, Math.sin(a) * this.size * 0.42);
+      spot.target.position.set(Math.cos(a) * this.size * 0.2, 0, Math.sin(a) * this.size * 0.2);
+      this.scene.add(spot.target);
+      spot.castShadow = i === 0;   // one shadow-caster is enough; they are costly
+      if (spot.castShadow) {
+        spot.shadow.mapSize.set(1024, 1024);
+        spot.shadow.bias = -0.0008;
+        spot.shadow.camera.layers.enable(AVATAR_LAYER);
+      }
+      track(spot);
+      return spot;
+    });
+
     const key = new THREE.DirectionalLight(0xffffff, 1.4);
     key.position.set(this.size * 0.5, this.size * 1.2, this.size * 0.4);
     key.castShadow = true;
@@ -146,6 +230,8 @@ export class Arena {
     const s = this.size;
     Object.assign(key.shadow.camera, { near: 1, far: s * 4, left: -s, right: s, top: s, bottom: -s });
     key.shadow.bias = -0.0006;
+    // Shadow maps cull by layer too; without this the fly casts no shadow.
+    key.shadow.camera.layers.enable(AVATAR_LAYER);
     track(key);
 
     // Two neon rim lights, matching the lab art's cyan/magenta key.
@@ -281,10 +367,13 @@ export class Arena {
       // LEFT eye belongs at -right; this used to be mirrored, putting the left
       // eye on the fly's right and quietly inverting every steering decision.
       const lateral = eye.side === 'L' ? -EYE_SEPARATION : EYE_SEPARATION;
+      // Placed at the actual eye position: laterally apart AND forward of the
+      // body centre, so the cameras sit where the eye spheres are rather than
+      // inside the thorax looking out through it.
       eye.camera.position.set(
-        avatar.position.x + rx * lateral,
+        avatar.position.x + rx * lateral + fx * EYE_FORWARD,
         avatar.position.y + EYE_HEIGHT,
-        avatar.position.z + rz * lateral,
+        avatar.position.z + rz * lateral + fz * EYE_FORWARD,
       );
       eye.camera.rotation.set(0, avatar.yaw + Math.PI + splay, 0, 'YXZ');
 

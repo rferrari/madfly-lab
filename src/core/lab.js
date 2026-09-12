@@ -29,6 +29,7 @@ import { ScentField } from './gradients.js';
 import { LabAvatar } from '../avatar/lab-avatar.js';
 import { LabBrain } from '../brain/lab-brain.js';
 import { LabObserver } from '../observer/lab-observer.js';
+import { resolveGenotype, describeGenotype } from '../avatar/genotype.js';
 
 const MAX_CATCHUP_STEPS = 4;
 
@@ -41,6 +42,7 @@ export class MadFlyLab {
     serverUrl = 'ws://localhost:8770',
     brainHz = 60,
     arenaSize = 40,
+    brightness = 'normal',
     vision = true,
     eyeResolution = [96, 64],
     retinaRadius = 15,
@@ -69,6 +71,7 @@ export class MadFlyLab {
     this.brainDt = 1 / brainHz;
     this.visionEnabled = vision;
     this.cameraMode = camera;
+    this.brightness = brightness;
 
     this.time = 0;
     this.frame = 0;
@@ -119,6 +122,7 @@ export class MadFlyLab {
   async start() {
     this.arena.init();
     this.arena.setCameraMode(this.cameraMode);
+    this.arena.setBrightness(this.brightness);
 
     await this.brain.init();
 
@@ -212,7 +216,16 @@ export class MadFlyLab {
     while (this._accumulator >= this.brainDt && steps < MAX_CATCHUP_STEPS) {
       this._accumulator -= this.brainDt;
       steps++;
-      this._tick(this.brainDt, eyePixels);
+      // `visionFresh` only on the FIRST catch-up step. The looming detector
+      // measures motion BETWEEN successive frames, so handing it the same
+      // buffer twice makes it measure zero motion -- and its persistence
+      // counter, which requires ~40ms of sustained expansion, gets reset to
+      // zero by every duplicate. At 15fps rendering with a 60Hz brain that is
+      // 3 resets out of every 4 ticks, and looming could essentially never
+      // fire: the fly flew straight past a hazard fan without reacting.
+      // Sensory INPUT is sustained (setInput holds until changed), so skipping
+      // re-processing on the catch-up steps loses nothing.
+      this._tick(this.brainDt, eyePixels, steps === 1);
     }
     // Drop the backlog rather than spiral after a long stall (tab switch, GC).
     if (steps === MAX_CATCHUP_STEPS) this._accumulator = 0;
@@ -222,10 +235,12 @@ export class MadFlyLab {
     this.observer?.update(this, frameDt);
   };
 
-  _tick(dt, eyePixels) {
+  _tick(dt, eyePixels, visionFresh = true) {
     this.time += dt;
 
-    this.avatar.sense(this.brain, { eyePixels, scent: this.scent, time: this.time });
+    this.avatar.sense(this.brain, {
+      eyePixels, scent: this.scent, time: this.time, visionFresh,
+    });
 
     const ctx = { lab: this, avatar: this.avatar, brain: this.brain, time: this.time };
     for (const station of this.stations) station.tick(dt, ctx);
@@ -258,8 +273,47 @@ export class MadFlyLab {
     return this.avatar.identity;
   }
 
-  /** New cosmetic fly and a fresh run. */
-  mintNewFly(seed = null) { return this.reset({ remint: true, seed }); }
+  /**
+   * Mint a new fly. With no argument it is purely cosmetic; with a genotype it
+   * builds a fly to spec -- see avatar/genotype.js.
+   *
+   *     lab.mintNewFly()                        // new colours, same brain
+   *     lab.mintNewFly('blind')                 // a named genotype
+   *     lab.mintNewFly({ silence: ['LC4'] })    // a custom lesion
+   *
+   * Lesions apply immediately. A `circuit` or `mode` change needs a different
+   * pack or server, so that returns a genotype flagged `requiresReload` rather
+   * than pretending to have applied it.
+   */
+  mintNewFly(spec = null, seed = null) {
+    const genotype = resolveGenotype(spec ?? {});
+    this.genotype = genotype;
+
+    this.reset({ remint: true, seed: genotype.seed ?? seed });
+
+    // Vision is a property of the body, lesions of the brain.
+    this.avatar.visionEnabled = genotype.vision && !!this.avatar.eyes;
+    this.visionEnabled = this.avatar.visionEnabled;
+    if (!this.avatar.visionEnabled) {
+      // Leave no stale drive on the visual channels, or a blind fly would keep
+      // coasting on whatever it last saw.
+      for (const c of ['LPLC1_L', 'LPLC1_R', 'LPLC2_L', 'LPLC2_R', 'LC4_L', 'LC4_R']) {
+        this.brain.setInput(c, 0);
+      }
+    }
+
+    this.brain.clearSilenced();
+    if (genotype.silence.length) this.brain.silence(...genotype.silence);
+
+    const requiresReload = !!(
+      (genotype.circuit && genotype.circuit !== this.brain.circuit)
+      || (genotype.mode && genotype.mode !== this.brain.mode)
+    );
+
+    console.info(`[MadFlyLab] minted ${this.avatar.identity.name} — ${describeGenotype(genotype)}`
+      + (requiresReload ? ' (circuit/mode change needs a reload)' : ''));
+    return { ...this.avatar.identity, genotype, requiresReload };
+  }
 
   /**
    * Arrange stations evenly on a circle around the origin, facing inward.

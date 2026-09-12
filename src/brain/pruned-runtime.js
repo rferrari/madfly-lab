@@ -54,6 +54,9 @@ export class PrunedRuntime {
     // tracked in seconds, so a pulse lasts the same wall time at any tick rate.
     this.pulses = new Map();
     this.channelCache = new Map();
+    /** Lesion mask -- see silence(). Null until something is silenced. */
+    this.silenced = null;
+    this.silencedChannels = new Set();
     this.t = 0;
     this.ready = true;
   }
@@ -96,6 +99,48 @@ export class PrunedRuntime {
     this.pulses.clear();
   }
 
+  /**
+   * Silence a population -- hold its activation at zero every tick.
+   *
+   * This is a LESION, and it is the framework's honest version of "a fly with
+   * no eyes" or "a fly that cannot detect looming". It is the computational
+   * analogue of what a real lab does with a null mutant or an optogenetic
+   * silencer: the cells are still in the graph, still wired to everything they
+   * are really wired to, but they stop contributing. Everything downstream
+   * responds to their absence through the real connectivity.
+   *
+   * Deleting the neurons instead would be wrong -- it would also delete the
+   * paths that merely pass THROUGH them.
+   */
+  silence(channel) {
+    const idx = this.resolve(channel);
+    if (!idx.length) return this;
+    if (!this.silenced) this.silenced = new Uint8Array(this.n);
+    for (let k = 0; k < idx.length; k++) this.silenced[idx[k]] = 1;
+    this.silencedChannels.add(channel);
+    return this;
+  }
+
+  unsilence(channel) {
+    const idx = this.resolve(channel);
+    if (!this.silenced || !idx.length) return this;
+    for (let k = 0; k < idx.length; k++) this.silenced[idx[k]] = 0;
+    this.silencedChannels.delete(channel);
+    return this;
+  }
+
+  clearSilenced() {
+    this.silenced = null;
+    this.silencedChannels.clear();
+    return this;
+  }
+
+  _applySilencing() {
+    if (!this.silenced) return;
+    const { activations, silenced } = this;
+    for (let i = 0; i < this.n; i++) if (silenced[i]) activations[i] = 0;
+  }
+
   reset(noiseScale = 0) {
     if (noiseScale > 0) {
       for (let i = 0; i < this.n; i++) this.activations[i] = (Math.random() * 2 - 1) * noiseScale;
@@ -103,6 +148,7 @@ export class PrunedRuntime {
       this.activations.fill(0);
     }
     this.clearInputs();
+    this._applySilencing();
     this.t = 0;
   }
 
@@ -125,6 +171,7 @@ export class PrunedRuntime {
     }
 
     this.activations.set(next);
+    this._applySilencing();
     this.t += dt;
   }
 

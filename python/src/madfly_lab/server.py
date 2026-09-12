@@ -33,6 +33,7 @@ Run:
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import time
@@ -137,6 +138,8 @@ async def _handle(ws, shared):
             "source": shared["source"],
             "channels": {k: int(len(v)) for k, v in shared["channels"].items()},
             "reference": shared["reference"],
+            "somaB64": shared["soma_b64"],
+            "somaQuant": shared["soma_quant"],
         }))
 
         dt = 1.0 / tick_hz
@@ -242,9 +245,29 @@ def build_shared(cache_dir: str, dataset: str, circuit_name: str,
         strict=False, backend=backend,
     )
     print(calibrate.report(reference))
+    # Soma coordinates for the client's 3D point cloud. Mode B reads these from
+    # the pack; Mode A has no pack, so without this the brain panel is empty --
+    # which is the one panel you most want when running the whole connectome.
+    #
+    # Quantized to int16 over a normalized cube: 176k x 3 x 2 bytes = 1.0MB,
+    # sent once at handshake. Float32 would be 2.1MB for precision no point
+    # cloud can display.
+    xyz = np.asarray(c.sm_soma_xyz, dtype=np.float64)
+    valid = np.isfinite(xyz).all(axis=1) & (xyz != 0).any(axis=1)
+    center = np.median(xyz[valid], axis=0) if valid.any() else np.zeros(3)
+    radii = np.linalg.norm(xyz[valid] - center, axis=1) if valid.any() else np.array([1.0])
+    scale = float(np.percentile(radii, 98.0)) or 1.0
+    norm = np.zeros_like(xyz, dtype=np.float32)
+    norm[valid] = ((xyz[valid] - center) / scale).astype(np.float32)
+    quant = np.clip(norm * 8192.0, -32767, 32767).astype("<i2")
+    soma_b64 = base64.b64encode(quant.tobytes()).decode("ascii")
+    print(f"  soma cloud: {int(valid.sum())} positioned neurons, "
+          f"{len(soma_b64) / 1e6:.1f}MB base64 at handshake.")
+
     print("  ready.")
     return {
         "adjacency": W, "channels": channels, "n": c.n_sm,
+        "soma_b64": soma_b64, "soma_quant": 8192.0,
         "nnz": int(c.sm_adjacency.nnz), "dataset": c.dataset, "source": c.source,
         "reference": reference, "backend": backend,
     }
