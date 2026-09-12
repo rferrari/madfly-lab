@@ -18,7 +18,21 @@
  * sampling the gradient as it moves, which is closer to real chemotaxis anyway.
  */
 
-export const OLFACTORY_CHANNELS = ['ORN_DM1', 'ORN_VA6', 'ORN_DA1', 'ORN_DA2'];
+export const OLFACTORY_CHANNELS = ['ORN_DM1', 'ORN_VA6', 'ORN_DA1', 'ORN_DA2', 'ORN_V'];
+
+/**
+ * Glomeruli a real fly finds AVERSIVE.
+ *
+ *   ORN_V   CO2 (Gr21a/Gr63a) -- what rotting and fermenting matter gives off
+ *   ORN_DA2 geosmin (Or56a)   -- harmful mould
+ *
+ * Used to give odour a SIGN at the body. It has to be done here, because this
+ * pruned rate model does not reproduce aversion on its own: measured, a CO2
+ * drive shifts forward drive by +0.0021 -- weakly positive, the same direction
+ * as food. The neurons carrying the signal are real and really are aversive in
+ * the animal; what the body does about it is ours.
+ */
+export const AVERSIVE_CHANNELS = new Set(['ORN_V', 'ORN_DA2']);
 
 export class OlfactoryReceptors {
   constructor({ channels = OLFACTORY_CHANNELS, gain = 1.5 } = {}) {
@@ -46,6 +60,19 @@ export class OlfactoryReceptors {
   /** Push the current sample into the brain as sustained ORN drive. */
   drive(brain) {
     for (const [channel, intensity] of this.intensities) brain.setInput(channel, intensity);
+  }
+
+  /**
+   * Net attractiveness of what the fly can currently smell: attractive odours
+   * minus aversive ones. One number the body can climb, so approaching food
+   * and fleeing rot are the same rule with opposite sign.
+   */
+  valence() {
+    let v = 0;
+    for (const [channel, intensity] of this.intensities) {
+      v += AVERSIVE_CHANNELS.has(channel) ? -intensity : intensity;
+    }
+    return v;
   }
 
   strongest() {

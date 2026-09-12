@@ -44,6 +44,13 @@ _ORN = {
     "ORN_VA6": "ORN_VA6",
     "ORN_DA1": "ORN_DA1",
     "ORN_DA2": "ORN_DA2",
+    # ORN_V is the CO2 glomerulus (Gr21a/Gr63a), 55 real neurons, and one of the
+    # few channels in the fly with a documented AVERSIVE valence -- CO2 is what
+    # rotting and fermenting matter gives off. Included so a scene can put out
+    # something the fly should want to get away from, rather than only things it
+    # should want. Whether this pruned rate model actually reproduces avoidance
+    # is a separate question and is measured, not assumed.
+    "ORN_V": "ORN_V",
 }
 
 # Real visual projection neurons the framework's looming detector drives.

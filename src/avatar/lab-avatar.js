@@ -165,7 +165,7 @@ export class LabAvatar {
     // Last sensed values, exposed for the HUD and for scenes.
     this.sensors = {
       left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0,
-      odour: 0, odourDelta: 0, wind: 0, scent: new Map(),
+      odour: 0, odourDelta: 0, valence: 0, wind: 0, scent: new Map(),
     };
     this.motor = { steer: 0, forward: 0, escape: 0, feeding: 0 };
     this.escapeUntil = 0;
@@ -321,11 +321,18 @@ export class LabAvatar {
     // Klinokinesis, computed here and applied in act(). See the comment there
     // for why this is engineered rather than read from the connectome.
     if (this.chemotaxis) {
+      // Climb NET valence (attractive minus aversive), not raw intensity. One
+      // rule then covers both cases: cast when things are getting worse, hold
+      // course when they are getting better -- whether "worse" means losing a
+      // food plume or walking into CO2.
+      const valence = this.olfaction.valence();
+      const delta = valence - (this._lastValence ?? valence);
+      this._lastValence = valence;
       const best = this.olfaction.strongest();
-      const delta = best.channel ? (this.olfaction.deltas.get(best.channel) ?? 0) : 0;
       this.sensors.odour = best.intensity;
       this.sensors.odourDelta = delta;
-      if (best.intensity > this.chemotaxisFloor) {
+      this.sensors.valence = valence;
+      if (Math.abs(valence) > this.chemotaxisFloor) {
         // Falling gradient -> cast about; rising -> hold course. The sign is
         // kept across ticks so a cast is a sustained arc, not a jitter.
         if (delta < -1e-5) {
@@ -411,16 +418,24 @@ export class LabAvatar {
     this.velocity.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(this.speed);
     this.position.addScaledVector(this.velocity, dt);
 
-    // Arena walls: reflect rather than clamp, so a fly that walks into the edge
-    // turns around instead of grinding along it forever.
+    // Arena walls. Hitting one is a real tactile event -- same mechanosensory
+    // cells as bumping a station -- and it turns the fly back INWARD.
+    //
+    // Mirror reflection was not enough: reflecting off x then z can leave the
+    // heading oscillating between two walls, and the fly parks in a corner.
+    // Aiming it at the middle with a random spread instead is what gets it
+    // back into the lab.
     const b = this.bounds;
-    if (Math.abs(this.position.x) > b) {
-      this.position.x = Math.sign(this.position.x) * b;
-      this.yaw = -this.yaw;
-    }
-    if (Math.abs(this.position.z) > b) {
-      this.position.z = Math.sign(this.position.z) * b;
-      this.yaw = Math.PI - this.yaw;
+    const hitX = Math.abs(this.position.x) > b;
+    const hitZ = Math.abs(this.position.z) > b;
+    if (hitX || hitZ) {
+      if (hitX) this.position.x = Math.sign(this.position.x) * b;
+      if (hitZ) this.position.z = Math.sign(this.position.z) * b;
+      const inward = Math.atan2(-this.position.x, -this.position.z);
+      this.yaw = inward + (Math.random() - 0.5) * 1.2;
+      this.speed *= 0.4;
+      this.touch(0.5);
+      this.onWall?.(this);
     }
 
     if (this.object3D) {

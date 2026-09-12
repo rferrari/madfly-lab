@@ -62,6 +62,7 @@ import { Screen } from './stations/screen.js';
 import { Workstation } from './stations/workstation.js';
 import { LightSwitch } from './stations/light-switch.js';
 import { Mate } from './stations/mate.js';
+import { OdourCube, SugarCube, PoopCube } from './stations/cube.js';
 import { FoodBowl } from './stations/food-bowl.js';
 import { HazardFan } from './stations/hazard-fan.js';
 
@@ -75,10 +76,14 @@ StationBase.Screen = Screen;
 StationBase.Workstation = Workstation;
 StationBase.LightSwitch = LightSwitch;
 StationBase.Mate = Mate;
+StationBase.OdourCube = OdourCube;
+StationBase.SugarCube = SugarCube;
+StationBase.PoopCube = PoopCube;
 StationBase.FoodBowl = FoodBowl;
 StationBase.HazardFan = HazardFan;
 
 export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch, Mate };
+export { OdourCube, SugarCube, PoopCube } from './stations/cube.js';
 export { makeFloorLabel, makeScreenTexture } from './core/label.js';
 
 export { CIRCUITS } from './circuits.js';

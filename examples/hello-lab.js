@@ -29,7 +29,7 @@ const lab = new MadFlyLab({
   mode: params.get('mode') ?? 'auto',
   circuit: params.get('circuit') ?? 'courtship',
   camera: 'chase',
-  arenaSize: 26,
+  arenaSize: 17,
   avatarOptions: { seed: params.get('seed') ?? undefined },
 });
 
@@ -50,19 +50,26 @@ const screen = lab.addStation(new Station.Screen({
 // to differ (VA6 radius 9, DM1 radius 7, and DM1 tinted a dimmer cyan), which
 // made the fly look like it liked one food and avoided the other -- it was
 // simply smelling one from further away and seeing it better.
-const FOOD = { scentRadius: 8, color: 0x39ff88 };
 lab.addStation(new Station.FoodBowl({
-  ...FOOD, scentType: 'ORN_VA6',
+  scentRadius: 8, scentType: 'ORN_VA6',
   onKick: () => log('forage: reached the VA6 bowl'),
 }));
-lab.addStation(new Station.FoodBowl({
-  ...FOOD, scentType: 'ORN_DM1',
-  onKick: () => log('forage: reached the DM1 bowl'),
+
+// A sugar cube and a rotten one: matte, unlit, identical but for the odour, so
+// only the smell can decide anything. ORN_DM1 is a real attractive glomerulus,
+// ORN_V the real CO2 one a live fly avoids.
+lab.addStation(new Station.SugarCube({
+  scentRadius: 8,
+  onTaste: (on) => on && log('sugar: tasting → DNp06'),
 }));
+lab.addStation(new Station.PoopCube({ scentRadius: 8 }));
 
 // 4. Hazard Fan -- looming threat, rotor in a vertical plane facing the arena
 //    so the blades genuinely expand across the fly's visual field.
-lab.addStation(new Station.HazardFan({ rotationSpeed: 10 }));
+const fan = lab.addStation(new Station.HazardFan({
+  rotationSpeed: 10,
+  onRunning: (on) => log(`fan ${on ? 'ON' : 'OFF'} — airflow ${on ? 'restored' : 'stopped'}`),
+}));
 
 // 5. Light switch -- kills all visual input. Watch the retinal panel go dark
 //    and the photoreceptors re-adapt.
@@ -88,7 +95,7 @@ lab.addStation(new Station.Mate({
 
 // A tight ring keeps the fly inside the experiment. At radius 11 in a 40-unit
 // arena it simply walked out between the stations and hit the wall.
-lab.arrangeInRing(8);
+lab.arrangeInRing(16);
 
 // Real Giant Fiber escape. DNp01 firing is the fly deciding to leave.
 lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), { threshold: 0.5 });
@@ -120,6 +127,7 @@ addEventListener('keydown', (e) => {
   }
   if (e.key === 'p' || e.key === 'P') { lab.avatar.touch(1); log('poke: → mechanosensory_tactile'); }
   if (e.key === 'l' || e.key === 'L') lights.toggle();
+  if (e.key === 'f' || e.key === 'F') fan.toggle();
   if (e.key === 'b' || e.key === 'B') log(`brightness: ${lab.arena.cycleBrightness()}`);
   if (e.key === 'v' || e.key === 'V') log(`brain view: ${lab.observer.cycleCloudView()}`);
   // C cycles circuits live -- swaps which parts of the real brain are loaded.

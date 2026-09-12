@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CompoundEye, fovForRetina } from '../src/avatar/retina.js';
 import { LoomingDetector } from '../src/avatar/motion.js';
 import { ScentField } from '../src/core/gradients.js';
-import { OlfactoryReceptors } from '../src/avatar/olfaction.js';
+import { OlfactoryReceptors, AVERSIVE_CHANNELS } from '../src/avatar/olfaction.js';
 import { Station, Triggers } from '../src/core/station.js';
 import { FoodBowl } from '../src/stations/food-bowl.js';
 import { SlotMachine } from '../src/stations/slot-machine.js';
@@ -150,10 +150,33 @@ describe('OlfactoryReceptors', () => {
 
     const driven = new Map();
     orn.drive({ setInput: (c, v) => driven.set(c, v) });
-    assert.deepEqual([...driven.keys()].sort(), ['ORN_DA1', 'ORN_DA2', 'ORN_DM1', 'ORN_VA6']);
+    assert.deepEqual([...driven.keys()].sort(),
+      ['ORN_DA1', 'ORN_DA2', 'ORN_DM1', 'ORN_V', 'ORN_VA6']);
     assert.ok(driven.get('ORN_VA6') > 0);
     assert.equal(driven.get('ORN_DA1'), 0);
     assert.equal(orn.strongest().channel, 'ORN_VA6');
+  });
+
+  test('valence is signed: aversive glomeruli subtract', () => {
+    // This is what lets one rule cover both approach and avoidance. The CO2
+    // channel is aversive in a real fly, and this pruned rate model does NOT
+    // reproduce that on its own -- measured, a CO2 drive nudges forward drive
+    // +0.0021, the same direction as food. So the sign lives here, at the body.
+    assert.ok(AVERSIVE_CHANNELS.has('ORN_V'), 'CO2 should be aversive');
+    assert.ok(!AVERSIVE_CHANNELS.has('ORN_DM1'), 'fruit odour should not be');
+
+    const sweet = new ScentField();
+    sweet.emit('ORN_DM1', { position: new THREE.Vector3(0, 0, 0), radius: 6, strength: 1 });
+    const rot = new ScentField();
+    rot.emit('ORN_V', { position: new THREE.Vector3(0, 0, 0), radius: 6, strength: 1 });
+
+    const a = new OlfactoryReceptors();
+    a.sample(sweet, new THREE.Vector3(1, 0, 0));
+    assert.ok(a.valence() > 0, `sugar should read positive, got ${a.valence()}`);
+
+    const b = new OlfactoryReceptors();
+    b.sample(rot, new THREE.Vector3(1, 0, 0));
+    assert.ok(b.valence() < 0, `rot should read negative, got ${b.valence()}`);
   });
 
   test('reports gradient direction between samples', () => {

@@ -42,19 +42,21 @@ export class HazardFan extends Station {
     this.windRadius = opts.windRadius ?? 8;
     this.windStrength = opts.windStrength ?? 1.0;
     this._removeWind = null;
+    /** Running state. Click the fan (or call toggle()) to switch it off. */
+    this.running = opts.running !== false;
+    this._windEmitter = null;
   }
 
   build() {
     const group = new THREE.Group();
 
-    // Rotor centred at fly eye height (0.75): a hazard the fly cannot see as
-    // it closes in cannot loom, and the blades used to sit at 1.5 -- the top
-    // edge of its field at 1.5 units and gone by 1.
+    // Rotor raised to 1.05 to avoid blade tips colliding with ground during rotation.
+    // Blades (0.34 tall) extend from ~0.88 to ~1.22, with tips at 0.75 radius.
     const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.14, 0.8, 12),
+      new THREE.CylinderGeometry(0.1, 0.14, 1.0, 12),
       new THREE.MeshStandardMaterial({ color: 0x2a1638, roughness: 0.6, metalness: 0.5 }),
     );
-    post.position.y = 0.4;
+    post.position.y = 0.5;
     post.castShadow = true;
     group.add(post);
 
@@ -64,7 +66,7 @@ export class HazardFan extends Station {
     // so the motion-opponency detector sees radial expansion. A horizontal
     // rotor is edge-on from ground level and produces almost no expansion.
     this.rotor = new THREE.Group();
-    this.rotor.position.set(0, 0.85, 0.12);
+    this.rotor.position.set(0, 1.05, 0.12);
     const bladeMat = new THREE.MeshStandardMaterial({
       color: THEME.red, emissive: THEME.red, emissiveIntensity: 0.8,
       roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide,
@@ -89,11 +91,11 @@ export class HazardFan extends Station {
       }),
     );
     hub.rotation.x = Math.PI / 2;
-    hub.position.set(0, 0.85, 0.2);
+    hub.position.set(0, 1.05, 0.2);
     group.add(hub);
 
     this.warn = new THREE.PointLight(THEME.red, 6, 8, 2);
-    this.warn.position.y = 1.0;
+    this.warn.position.y = 1.3;
     group.add(this.warn);
     return group;
   }
@@ -103,12 +105,15 @@ export class HazardFan extends Station {
     // The lab's spatial field is channel-keyed, so it carries wind as readily
     // as odour -- same falloff, different modality and different real neurons.
     if (this.windStrength > 0) {
-      this._removeWind = lab.scent.emit('wind', {
+      this._windEmitter = {
         position: this.position,
         radius: this.windRadius,
         strength: this.windStrength,
-        enabled: this.enabled,
-      });
+        // The field honours `enabled`, so switching the fan off stops the wind
+        // at source rather than merely hiding the blades.
+        enabled: this.enabled && this.running,
+      };
+      this._removeWind = lab.scent.emit('wind', this._windEmitter);
     }
   }
 
@@ -118,7 +123,29 @@ export class HazardFan extends Station {
     super.detach();
   }
 
+  /** Switch the fan on or off. Stops the blades AND the airflow. */
+  toggle() { return this.setRunning(!this.running); }
+
+  setRunning(on) {
+    this.running = !!on;
+    if (this._windEmitter) this._windEmitter.enabled = this.enabled && this.running;
+    if (this.warn) this.warn.visible = this.running;
+    this.onRunning?.(this.running, this);
+    return this.running;
+  }
+
   update(dt, ctx) {
+    if (!this.running) {
+      // Spin down rather than stopping dead; a coasting fan still looms.
+      this.rotationSpeed = Math.max(0, this.rotationSpeed - dt * 6);
+      if (this.rotor) this.rotor.rotation.z += this.rotationSpeed * dt;
+      if (this.warn) this.warn.intensity = 0;
+      return;
+    }
+    if (this.rotationSpeed < (this.options.rotationSpeed ?? 10)) {
+      this.rotationSpeed = Math.min(this.options.rotationSpeed ?? 10,
+        this.rotationSpeed + dt * 8);
+    }
     if (this.rotor) this.rotor.rotation.z += this.rotationSpeed * dt;
 
     const distance = this.distanceTo(ctx.avatar.position);
