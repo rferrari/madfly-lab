@@ -52,8 +52,34 @@ describe('mflpack format', { skip }, () => {
     // the assertion; check contents are sane too.
     assert.equal(minimal.somaXYZ.length, minimal.nNeurons * 3);
     assert.equal(minimal.typeIdx.length, minimal.nNeurons);
-    for (let i = 0; i < minimal.nNeurons; i += 37) {
-      assert.ok(minimal.typeNames[minimal.typeIdx[i]], `neuron ${i} has no type name`);
+
+    // Every index must resolve to a string, but the string may legitimately be
+    // EMPTY: about 1.3% of neurons in male-cns carry no cell-type annotation at
+    // all. That is a property of the dataset, not a gap in the pack, and
+    // inventing a placeholder type for them would be inventing data.
+    let untyped = 0;
+    for (let i = 0; i < minimal.nNeurons; i++) {
+      const t = minimal.typeOf(i);
+      assert.equal(typeof t, 'string', `neuron ${i} has no type entry at all`);
+      if (t === '') untyped++;
+    }
+    assert.ok(untyped / minimal.nNeurons < 0.15,
+      `${untyped}/${minimal.nNeurons} neurons untyped — suspiciously many`);
+  });
+
+  test('every circuit ships a complete sensory and motor core', () => {
+    // A circuit missing part of this produces a fly that cannot function, and
+    // the failure is silent: the dopamine circuit once had no visual channels,
+    // so the avatar's eyes drove nothing and the fly stood still with no error
+    // anywhere. The core is a floor, not a convention.
+    const CORE = [
+      'LPLC1_L', 'LPLC1_R', 'LPLC2_L', 'LPLC2_R', 'LC4_L', 'LC4_R',
+      'ORN_DM1', 'ORN_VA6', 'ORN_DA1', 'ORN_DA2', 'taste', 'touch',
+      'DNa01_L', 'DNa01_R', 'DNp09', 'DNp01', 'DNp06',
+    ];
+    for (const ch of CORE) {
+      assert.ok(minimal.channels.get(ch)?.length > 0,
+        `'minimal' is missing core channel ${ch} — that fly cannot function`);
     }
   });
 

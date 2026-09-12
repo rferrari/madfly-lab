@@ -124,6 +124,23 @@ _DOPAMINE = {
 _MB = {"KC": "KC*", "MBON": "MBON*"}
 
 
+# ---------------------------------------------------------------------------
+# The CORE every circuit gets.
+#
+# A circuit that omits part of this produces a fly that cannot function, and
+# the failure is silent and baffling: the dopamine circuit originally had no
+# visual channels at all, so the avatar's eyes drove nothing, no forward
+# command was ever produced, and the fly just stood still on the spot. Nothing
+# reported an error -- the channels simply did not exist.
+#
+# So the core is not a convention, it is a floor. Every circuit is a whole fly:
+# two eyes, four glomeruli, taste, touch, and the full descending motor set
+# including feeding. Circuits then differ by what they add DEPTH to, not by
+# what they are missing.
+_CORE_INPUTS = {**_LOOMING, **_ORN, **_TOUCH, **_TASTE}
+_CORE_OUTPUTS = {**_MOTOR, **_FEEDING}
+
+
 CIRCUITS = {
     "escape-and-steering": Circuit(
         name="escape-and-steering",
@@ -132,8 +149,8 @@ CIRCUITS = {
             "DNp01 (Giant Fiber), DNp03, DNa01, DNp09. The smallest useful "
             "circuit -- what a scene needs to make a fly dodge and walk."
         ),
-        inputs={**_LOOMING, **_ORN, **_TOUCH},
-        outputs=_MOTOR,
+        inputs=_CORE_INPUTS,
+        outputs=_CORE_OUTPUTS,
         substrate=("CT1",),
         # The 2,558 tactile seeds raise the floor considerably; hops=2/top_k=10
         # reached 12,453 neurons, well past the Mode B band. Measured at
@@ -150,9 +167,18 @@ CIRCUITS = {
             "neurons. For scenes that care about what the fly learns, not just "
             "where it walks."
         ),
-        inputs={**_ORN, **_DOPAMINE},
-        outputs={**_MB, **_DOPAMINE, **_MOTOR},
-        hops=2,
+        # Vision and touch are included even though this circuit is "about"
+        # learning. Without them the avatar's eyes drive nothing, no forward
+        # command is produced, and the fly simply stands still -- a circuit
+        # that cannot move is not a useful place to study reward.
+        inputs={**_CORE_INPUTS, **_DOPAMINE},
+        outputs={**_CORE_OUTPUTS, "MBON": "MBON*", **_DOPAMINE},
+        # KC is 4,064 real cells -- most of a pack's budget if seeded. It stays
+        # in the graph as substrate (the ORN -> KC -> MBON path is intact) and
+        # is still resolvable by name; it is just not a seed.
+        substrate=("KC",),
+        hops=1,
+        top_k=3,
     ),
     "courtship-and-foraging": Circuit(
         name="courtship-and-foraging",
@@ -162,9 +188,9 @@ CIRCUITS = {
             "DNp13 (copulation attempt), DNa01 (steering) and DNp09 (forward "
             "walking), with the looming escape pathway kept alive alongside."
         ),
-        inputs={**_ORN, **_LOOMING, **_DOPAMINE, **_TOUCH, **_TASTE},
+        inputs={**_CORE_INPUTS, **_DOPAMINE},
         outputs={
-            **_MOTOR,
+            **_CORE_OUTPUTS,
             **_DOPAMINE,
             "DNp13": "DNp13",
             "DNp13_L": {"type": "DNp13", "side": "L"},
@@ -191,15 +217,16 @@ CIRCUITS = {
     "minimal": Circuit(
         name="minimal",
         description=(
-            "Smallest pack the framework ships (~300 real neurons): looming in, "
-            "steering out, nothing else. For smoke tests and for embedding a "
-            "brain in something that is not a fly (see the CityDriver preset "
-            "idea in the spec)."
+            "The smallest COMPLETE fly: the full sensory and motor core and "
+            "nothing else. It sees, smells, tastes, feels, walks, turns, "
+            "escapes and feeds -- it just has no mushroom body, no dopamine "
+            "and no courtship hub, so it cannot learn or court. Use it when you "
+            "want the cheapest brain that still behaves like an animal."
         ),
-        inputs=_LOOMING,
-        outputs={k: v for k, v in _MOTOR.items() if "DNa01" in k or "DNp03" in k},
+        inputs=_CORE_INPUTS,
+        outputs=_CORE_OUTPUTS,
         hops=1,
-        top_k=4,
+        top_k=2,
     ),
 }
 

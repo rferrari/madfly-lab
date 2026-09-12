@@ -300,18 +300,50 @@ export class MadFlyLab {
     if (this._swapping) return null;
     this._swapping = true;
     const previous = this.brain.circuit;
+    const wantsModeA = !!CIRCUITS[name]?.modeA;
     try {
       const fromModeA = this.brain.mode === 'full-connectome';
+      const { serverUrl, noise } = this.brain;
       this.brain.dispose();
 
       this.brain = new LabBrain({
-        mode: 'pruned-subgraph',
-        circuit: name,
+        // The 'full' circuit IS Mode A -- there is no pack for it. Requesting
+        // it connects to the server; everything else loads a local pack.
+        mode: wantsModeA ? 'full-connectome' : 'pruned-subgraph',
+        circuit: wantsModeA ? (this._serverCircuit ?? 'courtship-and-foraging') : name,
         tickHz: this.brainHz,
-        noise: this.brain.noise,
-        serverUrl: this.brain.serverUrl,
+        noise,
+        serverUrl,
       });
       await this.brain.init();
+
+      if (wantsModeA) {
+        // init() resolves as soon as the socket is opened; the handshake may
+        // still be in flight. Give it a moment, then report honestly if the
+        // server never answered rather than leaving a dead brain in place.
+        const up = await new Promise((res) => {
+          const started = performance.now();
+          const poll = () => {
+            if (this.brain.runtime?.ready) return res(true);
+            if (performance.now() - started > 7000) return res(false);
+            setTimeout(poll, 100);
+          };
+          poll();
+        });
+        if (!up) {
+          console.warn(`[MadFlyLab] no Mode A server on ${serverUrl} — `
+            + `start it with \`npm run brain:full\`. Falling back to ${previous}.`);
+          this.brain.dispose();
+          this.brain = new LabBrain({
+            mode: 'pruned-subgraph', circuit: previous,
+            tickHz: this.brainHz, noise, serverUrl,
+          });
+          await this.brain.init();
+          if (this.observer) { this.observer.dispose(); this.observer.mount(this); }
+          this.avatar.reset();
+          return { circuit: previous, neurons: this.brain.nNeurons, serverMissing: true };
+        }
+      }
 
       // The observer caches pack-derived state; rebuild it against the new one.
       if (this.observer) {
@@ -322,8 +354,11 @@ export class MadFlyLab {
       this.genotype = null;
 
       console.info(`[MadFlyLab] circuit ${previous} -> ${name}`
-        + (fromModeA ? ' (left Mode A; restart with ?mode=full-connectome)' : ''));
-      return { circuit: name, neurons: this.brain.nNeurons, leftModeA: fromModeA };
+        + (fromModeA && !wantsModeA ? ' (left Mode A)' : ''));
+      return {
+        circuit: name, neurons: this.brain.nNeurons,
+        leftModeA: fromModeA && !wantsModeA, modeA: wantsModeA,
+      };
     } finally {
       this._swapping = false;
     }

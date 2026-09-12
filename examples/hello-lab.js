@@ -108,8 +108,13 @@ addEventListener('keydown', (e) => {
     log('loading circuit…');
     lab.cycleCircuit().then((r) => {
       if (!r) return;
-      log(`${CIRCUITS[r.circuit].label} — ${r.neurons.toLocaleString()} real neurons`);
-      if (r.leftModeA) log('(switched out of Mode A; reload with ?mode=full-connectome)');
+      if (r.serverMissing) {
+        log('no Mode A server — run `npm run brain:full`. Stayed on '
+          + `${CIRCUITS[r.circuit].label}.`);
+        return;
+      }
+      log(`${CIRCUITS[r.circuit].label} — ${r.neurons.toLocaleString()} real neurons`
+        + (r.modeA ? ' (Mode A)' : ''));
     });
   }
   if (e.key === '+' || e.key === '=') log(`brain zoom ${lab.observer.somaCloud?.zoom(1.25)}x`);
