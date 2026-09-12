@@ -37,7 +37,11 @@ const FRAG = `
     vec2 d = gl_PointCoord - vec2(0.5);
     float r = dot(d, d);
     if (r > 0.25) discard;
-    float a = smoothstep(0.25, 0.0, r);
+    // Gaussian-ish falloff rather than a hard disc: with tens of thousands of
+    // additively-blended sprites a sharp edge reads as speckle, a soft one
+    // reads as tissue.
+    float a = exp(-r * 11.0) - 0.063;
+    a = max(a, 0.0);
     vec3 c = mix(uCold, uHot, clamp(vAct, 0.0, 1.0));
     // Alpha scaled by uDensity: with 176,422 additively-blended points the
     // cloud saturates to a solid white blob, so a denser cloud gets fainter
@@ -96,7 +100,9 @@ export class SomaCloud {
     // you actually read a brain in, and the rotating one has to be framed for
     // its widest extent or it clips as it turns.
     this.view = 'front';
-    this.fill = 0.70;
+    // Two zoom steps out from the previous 0.70 default (each step is 1.25x),
+    // which left the cloud crowding its panel edges.
+    this.fill = 0.45;
     this.zoomLevel = 1;
     this.spin = 0;
     this._angle = { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 };
@@ -117,7 +123,7 @@ export class SomaCloud {
 
       this.material = new THREE.ShaderMaterial({
         uniforms: {
-          uSize: { value: this.n > 40000 ? 1.5 : 2.1 },
+          uSize: { value: this.n > 40000 ? 2.0 : 2.6 },
         // Additive blending means N overlapping points sum; a dense cloud needs
         // fainter points or it saturates to a white blob. But there is a floor:
         // 6000/n gave 0.034 for the full connectome, which rendered as nothing
@@ -125,7 +131,7 @@ export class SomaCloud {
         // Tuned against the real 176,422-point cloud: 0.22 saturated it to a
         // white blob, 0.034 looked invisible (though that test was confounded
         // by the NaN-camera bug below). ~0.07 at full scale shows structure.
-        uDensity: { value: Math.min(1, Math.max(0.16, 12000 / Math.max(1, this.n))) },
+        uDensity: { value: Math.min(0.85, Math.max(0.085, 7000 / Math.max(1, this.n))) },
           uCold: { value: new THREE.Color(THEME.violet) },
           uHot: { value: new THREE.Color(THEME.cyan) },
         },
@@ -165,7 +171,7 @@ export class SomaCloud {
    * `fill` of the frame, honouring the panel's aspect ratio so it fits in BOTH
    * axes rather than just vertically.
    */
-  fit(fill = this.fill ?? 0.70) {
+  fit(fill = this.fill ?? 0.45) {
     if (!this.points || !this.extent) return this;
     const { x, y, z } = this.extent;
     // Which extents face the camera depends on the view.
@@ -194,14 +200,14 @@ export class SomaCloud {
    */
   zoom(factor) {
     this.zoomLevel = Math.min(6, Math.max(0.25, this.zoomLevel * factor));
-    this.fill = 0.70 * this.zoomLevel;
+    this.fill = 0.45 * this.zoomLevel;
     this.fit();
     return +this.zoomLevel.toFixed(2);
   }
 
   resetZoom() {
     this.zoomLevel = 1;
-    this.fill = 0.70;
+    this.fill = 0.45;
     this.fit();
     return this;
   }

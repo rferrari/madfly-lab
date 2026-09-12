@@ -81,12 +81,6 @@ StationBase.HazardFan = HazardFan;
 export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch, Mate };
 export { makeFloorLabel, makeScreenTexture } from './core/label.js';
 
-/** Circuits the framework ships packs for. Mirrors python/src/madfly_lab/circuits.py. */
-export const CIRCUITS = {
-  'minimal': '715 real neurons - looming in, steering out. Smoke tests.',
-  'escape-and-steering': '4,963 real neurons - LC4/LPLC2 -> DNp01 Giant Fiber, DNp03, DNa01, DNp09.',
-  'dopamine-mushroom-body': '7,638 real neurons - ORN -> KC -> MBON with real PAM/PPL1 dopamine.',
-  'courtship-and-foraging': '7,922 real neurons - pheromone + food odour -> pC1/aSP -> DNp13/DNa01/DNp09.',
-};
+export { CIRCUITS } from './circuits.js';
 
 export const VERSION = '0.1.0';

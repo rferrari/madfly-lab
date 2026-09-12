@@ -23,13 +23,14 @@
  */
 
 import * as THREE from 'three';
-import { Arena } from './arena.js';
+import { Arena, AVATAR_LAYER } from './arena.js';
 import { fovForRetina } from '../avatar/retina.js';
 import { ScentField } from './gradients.js';
 import { LabAvatar } from '../avatar/lab-avatar.js';
 import { LabBrain } from '../brain/lab-brain.js';
 import { LabObserver } from '../observer/lab-observer.js';
 import { resolveGenotype, describeGenotype } from '../avatar/genotype.js';
+import { CIRCUITS } from '../circuits.js';
 
 const MAX_CATCHUP_STEPS = 4;
 
@@ -148,6 +149,12 @@ export class MadFlyLab {
    */
   _bindPointer() {
     const raycaster = new THREE.Raycaster();
+    // The avatar lives on its own layer so the eye cameras cannot see it (a fly
+    // does not see its own head). A Raycaster tests layer 0 only by default, so
+    // without this the fly becomes unclickable -- which is exactly what
+    // happened when that layer was introduced: click-to-poke silently stopped
+    // working with no error anywhere.
+    raycaster.layers.enable(AVATAR_LAYER);
     const ndc = new THREE.Vector2();
     let downAt = null;
 
@@ -277,6 +284,57 @@ export class MadFlyLab {
   }
 
   setCamera(mode) { this.arena.setCameraMode(mode); this.cameraMode = mode; return this; }
+
+  /**
+   * Swap to a different circuit without reloading the page.
+   *
+   * Loads that circuit's pack, rebuilds the runtime around it, and rebuilds the
+   * HUD panels that are sized by the pack (the soma cloud's point count and the
+   * telemetry's channel list both change). Lesions are dropped, because channel
+   * names are not guaranteed to exist in the new pack.
+   *
+   * Only meaningful in Mode B: in Mode A the circuit is whatever the server was
+   * started with, so this switches the brain to the local pack and says so.
+   */
+  async setCircuit(name) {
+    if (this._swapping) return null;
+    this._swapping = true;
+    const previous = this.brain.circuit;
+    try {
+      const fromModeA = this.brain.mode === 'full-connectome';
+      this.brain.dispose();
+
+      this.brain = new LabBrain({
+        mode: 'pruned-subgraph',
+        circuit: name,
+        tickHz: this.brainHz,
+        noise: this.brain.noise,
+        serverUrl: this.brain.serverUrl,
+      });
+      await this.brain.init();
+
+      // The observer caches pack-derived state; rebuild it against the new one.
+      if (this.observer) {
+        this.observer.dispose();
+        this.observer.mount(this);
+      }
+      this.avatar.reset();
+      this.genotype = null;
+
+      console.info(`[MadFlyLab] circuit ${previous} -> ${name}`
+        + (fromModeA ? ' (left Mode A; restart with ?mode=full-connectome)' : ''));
+      return { circuit: name, neurons: this.brain.nNeurons, leftModeA: fromModeA };
+    } finally {
+      this._swapping = false;
+    }
+  }
+
+  /** Cycle through the circuits the framework ships packs for. */
+  async cycleCircuit() {
+    const names = Object.keys(CIRCUITS);
+    const i = names.indexOf(this.brain.circuit);
+    return this.setCircuit(names[(i + 1) % names.length]);
+  }
 
   /**
    * Reset the run. `remint` gives the fly a new cosmetic identity; `noise`

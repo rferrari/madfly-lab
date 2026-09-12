@@ -14,7 +14,7 @@
  *     the eye that saw it and kicks the real DNp01 Giant Fiber.
  */
 
-import { MadFlyLab, Station, Triggers, GENOTYPES } from '../src/index.js';
+import { MadFlyLab, Station, Triggers, GENOTYPES, CIRCUITS } from '../src/index.js';
 
 let genotypeIndex = 0;
 
@@ -103,6 +103,15 @@ addEventListener('keydown', (e) => {
   if (e.key === 'l' || e.key === 'L') lights.toggle();
   if (e.key === 'b' || e.key === 'B') log(`brightness: ${lab.arena.cycleBrightness()}`);
   if (e.key === 'v' || e.key === 'V') log(`brain view: ${lab.observer.cycleCloudView()}`);
+  // C cycles circuits live -- swaps which parts of the real brain are loaded.
+  if (e.key === 'c' || e.key === 'C') {
+    log('loading circuit…');
+    lab.cycleCircuit().then((r) => {
+      if (!r) return;
+      log(`${CIRCUITS[r.circuit].label} — ${r.neurons.toLocaleString()} real neurons`);
+      if (r.leftModeA) log('(switched out of Mode A; reload with ?mode=full-connectome)');
+    });
+  }
   if (e.key === '+' || e.key === '=') log(`brain zoom ${lab.observer.somaCloud?.zoom(1.25)}x`);
   if (e.key === '-' || e.key === '_') log(`brain zoom ${lab.observer.somaCloud?.zoom(1 / 1.25)}x`);
   // Shift+G cycles genotypes -- the "MadFly Dr" bench. Lesions apply live.
