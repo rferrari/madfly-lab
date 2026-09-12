@@ -1,0 +1,32 @@
+{
+  "name": "mad-fly-lab",
+  "version": "0.1.0",
+  "description": "An unhinged 3D connectome sandbox for building mad insect brain experiences. Drop stations into a lab, hook up real Drosophila neurons, focus on the experience.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./stations": "./src/stations/index.js",
+    "./brain": "./src/brain/lab-brain.js"
+  },
+  "files": ["src", "packs", "AGENTS.md", "README.md", "THIRD_PARTY_NOTICES.md"],
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8330 --open",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js",
+    "pack": "cd python && .venv/bin/python scripts/build_pack.py --all --cache-dir ../../fly_simulation/.cache --out-dir ../packs",
+    "brain:full": "cd python && .venv/bin/python -m madfly_lab.server --cache-dir ../../fly_simulation/.cache"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "dependencies": {
+    "three": "^0.176.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["connectome", "drosophila", "neuroscience", "three.js", "simulation", "framework"]
+}

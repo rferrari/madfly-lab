@@ -1,0 +1,28 @@
+[project]
+name = "madfly-lab"
+version = "0.1.0"
+description = "MadFly Lab -- connectome access, circuit pruning, browser pack export, and the Mode A full-connectome runtime."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "scipy>=1.11",
+    "websockets>=12.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Only needed to FETCH a connectome from NeuPrint. Building packs from an
+# existing .npz cache (the normal path) does not require this.
+neuprint = ["neuprint-python>=0.4.26"]
+
+[project.scripts]
+madfly-build-pack = "madfly_lab.cli:build_pack_main"
+madfly-server = "madfly_lab.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/madfly_lab"]

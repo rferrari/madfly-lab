@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MadFly Lab</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0614; overflow: hidden; }
+      #app-canvas { display: block; width: 100vw; height: 100vh; }
+      #boot {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        color: #e8e0f5; font: 13px 'SF Mono', ui-monospace, monospace;
+        background: #0b0614; letter-spacing: 0.1em; z-index: 20;
+      }
+      #boot.gone { display: none; }
+      #boot b { color: #00e5ff; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <canvas id="app-canvas"></canvas>
+    <div id="boot">LOADING <b>REAL CONNECTOME</b> …</div>
+    <script type="module">
+      import('./examples/hello-lab.js')
+        .then(() => document.getElementById('boot').classList.add('gone'))
+        .catch((e) => {
+          document.getElementById('boot').innerHTML =
+            `<div style="max-width:60ch;line-height:1.7">FAILED: ${e.message}<br><br>
+             <span style="color:#9a5cff">If the pack is missing, build it:</span><br>
+             <code>cd python && uv run python scripts/build_pack.py --all \
+             --cache-dir ../../fly_simulation/.cache --out-dir ../packs</code></div>`;
+          console.error(e);
+        });
+    </script>
+  </body>
+</html>

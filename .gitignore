@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.cache/
+# Generated from the real connectome by python/scripts/build_pack.py. Rebuildable,
+# multi-megabyte, and binary -- rebuild rather than commit. See AGENTS.md.
+packs/*.mflpack
+packs/*.mflpack.gz
+.env
