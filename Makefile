@@ -107,13 +107,13 @@ start:  ## the whole lab: full-connectome brain + frontend, one command
 	  started=1; \
 	  printf "  loading 176,422 neurons"; \
 	  for i in $$(seq 1 $(BRAIN_WAIT)); do \
-	    if grep -q "server on" $(BRAIN_LOG) 2>/dev/null; then break; fi; \
-	    if grep -qE "Traceback|Error:" $(BRAIN_LOG) 2>/dev/null; then \
+	    if grep -qa "server on" $(BRAIN_LOG) 2>/dev/null; then break; fi; \
+	    if grep -qaE "Traceback|Error:" $(BRAIN_LOG) 2>/dev/null; then \
 	      echo; echo "  server failed to start:"; tail -15 $(BRAIN_LOG); exit 1; fi; \
 	    printf "."; sleep 2; \
 	  done; echo; \
-	  if grep -q "server on" $(BRAIN_LOG) 2>/dev/null; then \
-	    grep -E "device:|step cost" $(BRAIN_LOG) | sed 's/^/ /'; \
+	  if grep -qa "server on" $(BRAIN_LOG) 2>/dev/null; then \
+	    grep -aE "device:|step cost" $(BRAIN_LOG) | sed 's/^/ /'; \
 	    echo "  brain ready on ws://localhost:$(BRAIN_PORT)"; \
 	  else \
 	    echo "  still not ready after $$(( $(BRAIN_WAIT) * 2 ))s -- the lab will"; \
@@ -129,24 +129,27 @@ start:  ## the whole lab: full-connectome brain + frontend, one command
 all-in: packs start  ## rebuild packs first, then `start`
 
 stop:  ## stop any running brain and frontend
-	@# Prefer the PID file written by `start`. A `pkill -f <pattern>` here is a
-	@# trap: the pattern appears in this recipe's own command line, so pkill
-	@# matches the shell running it and make hangs killing itself. The pgrep
-	@# fallback below is anchored to the interpreter path and excludes this
-	@# shell, for servers started before the PID file existed.
-	@if [ -f $(BRAIN_PID) ] && kill -0 $$(cat $(BRAIN_PID)) 2>/dev/null; then \
-	  kill $$(cat $(BRAIN_PID)) 2>/dev/null || true; \
-	  echo "  stopped the Mode A server"; \
-	else \
-	  pids=$$(pgrep -f '[.]venv/bin/python .*madfly.lab[.]server' 2>/dev/null \
-	          | grep -vw "$$$$" || true); \
-	  if [ -n "$$pids" ]; then kill $$pids 2>/dev/null || true; \
-	    echo "  stopped the Mode A server"; fi; \
-	fi
-	@pids=$$(pgrep -f '[n]ode_modules/[.]bin/vite' 2>/dev/null | grep -vw "$$$$" || true); \
-	  if [ -n "$$pids" ]; then kill $$pids 2>/dev/null || true; \
-	    echo "  stopped the frontend"; fi
+	@# Kill by LISTENING PORT, never by command-line pattern.
+	@#
+	@# `pkill -f <pattern>` is a trap here and it bit twice: the pattern appears
+	@# in the command line of whatever shell is running the recipe, so pkill
+	@# matches that shell. Excluding $$$$ only protects the CURRENT shell -- when
+	@# `start` invokes `stop` as a sub-make, the pattern is still in the START
+	@# recipe's command line, so `stop` killed its own caller and make reported
+	@# "Terminated" before doing anything.
+	@#
+	@# A shell never owns a listening socket, so resolving the port's owner
+	@# cannot match anything but the real server.
+	@pid=$$(ss -ltnp 2>/dev/null | grep ':$(BRAIN_PORT)' \
+	        | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
+	  if [ -n "$$pid" ]; then kill $$pid 2>/dev/null || true; \
+	    echo "  stopped the Mode A server (pid $$pid)"; fi
+	@pid=$$(ss -ltnp 2>/dev/null | grep ':$(PORT)' \
+	        | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
+	  if [ -n "$$pid" ]; then kill $$pid 2>/dev/null || true; \
+	    echo "  stopped the frontend (pid $$pid)"; fi
 	@rm -f $(BRAIN_PID)
+	@sleep 1
 
 # ---- checks ---------------------------------------------------------------
 

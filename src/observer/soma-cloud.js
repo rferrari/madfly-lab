@@ -76,10 +76,20 @@ export class SomaCloud {
    */
   constructor(canvas, source) {
     this.canvas = canvas;
+    // Mode B hands over a ConnectomePack, which always carries somaXYZ. Mode A
+    // hands over a RemoteRuntime, which does NOT have it yet: the soma cloud is
+    // requested after the handshake so the handshake stays fast, and arrives a
+    // moment later via onSoma.
+    //
+    // So `null` here is a legitimate state, not an error -- build an empty
+    // cloud and let onSoma rebuild. Taking nNeurons from the runtime while
+    // somaXYZ was still null is exactly what crashed: 176,422 coordinates read
+    // out of nothing, on the very first frame of every Mode A session.
     const pack = source && source.somaXYZ
       ? { nNeurons: source.somaCount ?? source.somaXYZ.length / 3, somaXYZ: source.somaXYZ }
-      : source;
+      : null;
     this.pack = pack;
+    this.awaitingSoma = !!(source && !source.somaXYZ);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
