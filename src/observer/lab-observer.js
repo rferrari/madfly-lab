@@ -56,7 +56,7 @@ export class LabObserver {
     this.header.appendChild(this.headerBody);
 
     if (this.enabledPanels.includes('retina') && lab.avatar.eyes) {
-      const panel = this._panel(root, 'RETINAL VISION · L / R');
+      const panel = this._panel(root, 'RETINAL VISION');
       this.retinaCanvas = this._canvas(panel, PANEL_W, 110);
       this.retinaView = new RetinalView(this.retinaCanvas, {
         L: lab.avatar.eyes.L.retina, R: lab.avatar.eyes.R.retina,
