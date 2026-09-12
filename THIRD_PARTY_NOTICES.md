@@ -53,6 +53,13 @@ itself: generic cell-type lookup (`indices_of_type`, `indices_of_prefix`,
 `python/pyproject.toml`. **neuprint-python** (optional) is needed only to *fetch*
 a connectome; building packs from an existing cache does not require it.
 
+**ffmpeg.wasm** (`@ffmpeg/ffmpeg` 0.12.10, `@ffmpeg/util` 0.12.2, `@ffmpeg/core`
+0.12.6 — all MIT) — loaded on demand from jsdelivr by `src/observer/screen-
+recorder.js` the first time a recording is exported to MP4 (Shift+V). Not
+bundled and not in `package.json`: it is a multi-megabyte WASM download that
+most sessions never trigger, so it is fetched only at the moment of use rather
+than paid for on every page load.
+
 ## Citations
 
 - Dorkenwald, S. et al. *Neuronal wiring diagram of an adult brain.*

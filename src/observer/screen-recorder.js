@@ -43,6 +43,8 @@ export class ScreenRecorder {
     this.recordingDuration = 0;
 
     // Modal replay state
+    /** Cached FFmpeg instance, loaded lazily on first export. */
+    this._ffmpeg = null;
     this.modalShown = false;
     this.replayPaused = false;
     this.replayFrameImg = null;
@@ -63,6 +65,7 @@ export class ScreenRecorder {
     this.avatarState = [];
     this.recordedAt = new Date().toISOString();
     this.startTime = performance.now();
+    this._lastCaptureMs = undefined;
     console.log('🔴 Recording started');
   }
 
@@ -71,6 +74,17 @@ export class ScreenRecorder {
    */
   captureFrame(lab) {
     if (!this.isRecording) return;
+
+    // Throttle to options.fps. This is called once per rendered frame (i.e. at
+    // display refresh rate, commonly 60Hz+), but export and replay both assume
+    // a fixed `options.fps` -- the ffmpeg output framerate and the playback
+    // frame-index math (`playbackTime * options.fps`) both divide by it. Without
+    // this gate, a session captured at 60fps but muxed/scrubbed as 30fps plays
+    // back at roughly half real speed.
+    const now = performance.now();
+    const minIntervalMs = 1000 / this.options.fps;
+    if (this._lastCaptureMs !== undefined && now - this._lastCaptureMs < minIntervalMs) return;
+    this._lastCaptureMs = now;
 
     try {
       // Capture canvas as DataURL
@@ -90,19 +104,27 @@ export class ScreenRecorder {
         data: telemetrySnapshot,
       });
 
-      // Capture avatar state
-      const pos = lab.avatar.body.position;
+      // Capture avatar state. LabAvatar exposes position/yaw/speed directly
+      // (no .body, no .heading) -- the previous version read `lab.avatar.body
+      // .position` and `.heading`, which threw a TypeError on every frame,
+      // caught silently by the outer try/catch. That meant avatarState never
+      // got a single entry pushed, and -- since the throw happened before this
+      // point in the function -- brainChannels below never ran either.
+      const pos = lab.avatar.position;
       const vel = lab.avatar.velocity;
       this.avatarState.push({
         timestamp: performance.now() - this.startTime,
         position: [pos.x, pos.y, pos.z],
         velocity: [vel.x, vel.y, vel.z],
-        heading: lab.avatar.heading,
+        heading: lab.avatar.yaw,
+        speed: lab.avatar.speed,
       });
 
-      // Record available channels on first frame
+      // Record available channels on first frame. `channels()` with no
+      // argument returns everything; `'all'` is not a recognized filter (only
+      // 'input'/'output' are) and always returned [].
       if (this.frames.length === 1) {
-        this.brainChannels = lab.brain.channels('all');
+        this.brainChannels = lab.brain.channels();
       }
     } catch (err) {
       console.error('Frame capture error:', err);
@@ -412,9 +434,11 @@ export class ScreenRecorder {
         lines.push(`${channel}: ${hz} Hz`);
       }
       if (data.avatarState) {
-        const { position, velocity, heading } = data.avatarState;
+        const { position, heading, speed } = data.avatarState;
         lines.push(`pos: [${position[0].toFixed(1)}, ${position[2].toFixed(1)}]`);
-        lines.push(`speed: ${velocity[0]?.toFixed(2) || 0} u/s`);
+        // `speed` is the avatar's own scalar (u/s); an earlier version read
+        // velocity[0], which is just the X-component, not magnitude.
+        lines.push(`speed: ${(speed ?? 0).toFixed(2)} u/s`);
         lines.push(`heading: ${(heading * 180 / Math.PI).toFixed(0)}°`);
       }
       this.replayTelemetryOverlay.textContent = lines.join('\n');
@@ -461,7 +485,15 @@ export class ScreenRecorder {
   }
 
   /**
-   * Export recording as MP4 video (requires ffmpeg.wasm)
+   * Export recording as MP4 video (requires ffmpeg.wasm).
+   *
+   * NOTE ON THE VERSION MISMATCH THIS REPLACES: the previous version pinned
+   * `@ffmpeg/ffmpeg@0.12.10` (the modern class-based package: `new FFmpeg()`,
+   * `.load()`) but called it with the OLD 0.11.x factory API --
+   * `.FS('writeFile', ...)`, `.run(...)`, `.FS('readFile', ...)`. Those methods
+   * do not exist on a 0.12.x instance; it threw `ffmpeg.FS is not a function`
+   * the first time this ran. The 0.12.x equivalents used below are
+   * `writeFile`/`exec`/`readFile`/`deleteFile`, all async.
    */
   async exportVideo(filename = 'madfly-recording.mp4') {
     if (this.frames.length === 0) {
@@ -471,28 +503,34 @@ export class ScreenRecorder {
 
     console.log('🎬 Encoding video...');
 
-    // Load ffmpeg if not already loaded
-    if (!window.FFmpeg) {
+    // Load ffmpeg.wasm from jsdelivr (pinned, matching the rest of this file's
+    // CDN choice) if not already loaded. 0.12.x needs its core/wasm fetched as
+    // blob URLs -- passing bare CDN URLs to `.load()` runs into cross-origin
+    // worker restrictions in most browsers.
+    if (!this._ffmpeg) {
       console.log('📦 Loading ffmpeg...');
-      const FFmpegModule = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm');
-      window.FFmpeg = FFmpegModule.FFmpeg;
-      window.fetchFile = FFmpegModule.fetchFile;
+      const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm'),
+        import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm'),
+      ]);
+      const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+      const ffmpeg = new FFmpeg();
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      this._ffmpeg = ffmpeg;
     }
-
-    const { FFmpeg, fetchFile } = window;
-    const ffmpeg = new FFmpeg.FFmpeg();
+    const ffmpeg = this._ffmpeg;
 
     try {
-      await ffmpeg.load();
-
-      // Write frames to ffmpeg filesystem
+      // Write frames to ffmpeg's in-memory filesystem.
       console.log('📝 Writing frames to filesystem...');
       const framerate = this.options.fps;
 
-      // Convert images to PNG format for ffmpeg
       for (let i = 0; i < this.frames.length; i++) {
-        const imageData = await this._dataUrlToUint8Array(this.frames[i]);
-        ffmpeg.FS('writeFile', `frame_${String(i).padStart(6, '0')}.png`, imageData);
+        const imageData = this._dataUrlToUint8Array(this.frames[i]);
+        await ffmpeg.writeFile(`frame_${String(i).padStart(6, '0')}.png`, imageData);
 
         if (i % 30 === 0) {
           console.log(`✓ Wrote frame ${i}/${this.frames.length}`);
@@ -501,34 +539,33 @@ export class ScreenRecorder {
 
       // Run ffmpeg to create video
       console.log('⚙️ Running ffmpeg...');
-      await ffmpeg.run(
+      await ffmpeg.exec([
         '-framerate', String(framerate),
         '-i', 'frame_%06d.png',
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-crf', '23', // Quality (0-51, lower is better, 23 is default)
-        filename
-      );
+        filename,
+      ]);
 
       // Read output video
-      const data = ffmpeg.FS('readFile', filename);
-      ffmpeg.FS('unlink', filename);
+      const data = await ffmpeg.readFile(filename);
+      await ffmpeg.deleteFile(filename);
 
       // Clean up frame files
       for (let i = 0; i < this.frames.length; i++) {
-        ffmpeg.FS('unlink', `frame_${String(i).padStart(6, '0')}.png`);
+        await ffmpeg.deleteFile(`frame_${String(i).padStart(6, '0')}.png`);
       }
 
-      await ffmpeg.terminate();
-
-      // Download video
-      const blob = new Blob([data.buffer], { type: 'video/mp4' });
+      // Download video. `data` is a Uint8Array view; wrap in a fresh Blob part
+      // rather than passing `.buffer` directly, which can include padding
+      // bytes from the wasm heap's underlying ArrayBuffer.
+      const blob = new Blob([data], { type: 'video/mp4' });
       this._downloadBlob(blob, filename);
 
       console.log('✅ Video exported:', filename);
     } catch (err) {
       console.error('Video export error:', err);
-      await ffmpeg.terminate();
       throw err;
     }
   }
@@ -594,9 +631,12 @@ export class ScreenRecorder {
     return (this.frames.length * 50) / 1024;
   }
 
-  async _dataUrlToUint8Array(dataUrl) {
-    const response = await fetch(dataUrl);
-    return new Uint8Array(await response.arrayBuffer());
+  _dataUrlToUint8Array(dataUrl) {
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
   }
 
   _downloadBlob(blob, filename) {
