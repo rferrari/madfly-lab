@@ -24,8 +24,13 @@ export class FoodBowl extends Station {
         + `It will emit, but no real neuron will receive it.`,
       );
     }
+    const glomerulus = scentType.replace('ORN_', '');
+    const cellCount = { DM1: 74, VA6: 63, DA1: 204, DA2: 48 }[glomerulus];
     super({
-      name: 'Food Bowl', kickRadius: 1.2,
+      name: `Food Bowl (${glomerulus})`, kickRadius: 1.2,
+      label: `FOOD · ${glomerulus}`,
+      sublabel: `${scentType}${cellCount ? ` · ${cellCount} real neurons` : ''}`,
+      labelColor: opts.color ? `#${(opts.color).toString(16).padStart(6, '0')}` : '#39ff88',
       scentRadius: opts.scentRadius ?? 5, ...opts, scentType,
     });
     this.scentType = scentType;

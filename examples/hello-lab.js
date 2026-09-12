@@ -28,12 +28,13 @@ const lab = new MadFlyLab({
   avatarOptions: { seed: params.get('seed') ?? undefined },
 });
 
-// 1. Slot Machine -- blinking visual station, dopamine payout into real PAM11.
-const slots = lab.addStation(new Station.SlotMachine({
-  lightBlinkHz: 12,
+// 1. Screen -- a display the fly can look at, with a dopamine payout. Its
+//    surface is a canvas, so anything you draw there becomes real visual input.
+const screen = lab.addStation(new Station.Screen({
+  blinkHz: 6,
   payoutChance: 0.4,
   onKick: Triggers.throttle(1.5, () => {
-    log(`slots: pull ${slots.pulls}, ${slots.wins} payouts → PAM11`);
+    log(`screen: ${screen.views} views, ${screen.payouts} payouts → PAM11`);
   }),
 }));
 
@@ -48,11 +49,23 @@ lab.addStation(new Station.FoodBowl({
   onKick: () => log('forage: reached the DM1 bowl'),
 }));
 
-// 4. Hazard Fan -- looming threat. Each eye's own motion detector drives its
-//    own real LC4 population, so which side it approaches from matters.
+// 4. Hazard Fan -- looming threat, rotor in a vertical plane facing the arena
+//    so the blades genuinely expand across the fly's visual field.
 lab.addStation(new Station.HazardFan({ rotationSpeed: 10 }));
 
-lab.arrangeInRing(10);
+// 5. Light switch -- kills all visual input. Watch the retinal panel go dark
+//    and the photoreceptors re-adapt.
+const lights = lab.addStation(new Station.LightSwitch({
+  onToggle: (on) => log(`lights ${on ? 'ON' : 'OFF'} — visual input ${on ? 'restored' : 'removed'}`),
+}));
+
+// 6. Workstation -- type on it while the fly is nearby and it watches you.
+lab.addStation(new Station.Workstation({
+  text: 'hello fly\n',
+  onKey: Triggers.throttle(2, () => log('workstation: the fly is watching you type')),
+}));
+
+lab.arrangeInRing(11);
 
 // Real Giant Fiber escape. DNp01 firing is the fly deciding to leave.
 lab.brain.onSignal('DNp01', (v) => log(`escape: Giant Fiber ${v.toFixed(2)}`), { threshold: 0.5 });
@@ -73,6 +86,7 @@ addEventListener('keydown', (e) => {
     log(`minted ${fly.name}  ·  seed ${fly.seed}`);
   }
   if (e.key === 't' || e.key === 'T') { lab.avatar.touch(1); log('touch: poked via keyboard'); }
+  if (e.key === 'l' || e.key === 'L') lights.toggle();
 });
 
 function log(msg) {
@@ -86,4 +100,4 @@ function log(msg) {
 }
 
 window.lab = lab;
-console.info('MadFly Lab ready. 1-4 camera · R reset · N new fly · T touch · H hide HUD · click the fly to poke it.');
+console.info('MadFly Lab ready. 1-4 camera · R reset · N new fly · T touch · H hide HUD');

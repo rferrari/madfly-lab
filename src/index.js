@@ -35,7 +35,7 @@
 export { MadFlyLab } from './core/lab.js';
 export { Station, Triggers } from './core/station.js';
 export { ScentField } from './core/gradients.js';
-export { Arena, CAMERA_MODES, EYE_SPLAY } from './core/arena.js';
+export { Arena, CAMERA_MODES, EYE_SPLAY, EYE_SEPARATION } from './core/arena.js';
 export { THEME, CSS } from './core/theme.js';
 
 export { LabAvatar } from './avatar/lab-avatar.js';
@@ -57,6 +57,9 @@ export { Telemetry } from './observer/telemetry.js';
 
 import { Station as StationBase } from './core/station.js';
 import { SlotMachine } from './stations/slot-machine.js';
+import { Screen } from './stations/screen.js';
+import { Workstation } from './stations/workstation.js';
+import { LightSwitch } from './stations/light-switch.js';
 import { FoodBowl } from './stations/food-bowl.js';
 import { HazardFan } from './stations/hazard-fan.js';
 
@@ -66,10 +69,14 @@ import { HazardFan } from './stations/hazard-fan.js';
  * `Station.FoodBowl` and `class MyThing extends Station` work off this import.
  */
 StationBase.SlotMachine = SlotMachine;
+StationBase.Screen = Screen;
+StationBase.Workstation = Workstation;
+StationBase.LightSwitch = LightSwitch;
 StationBase.FoodBowl = FoodBowl;
 StationBase.HazardFan = HazardFan;
 
-export { SlotMachine, FoodBowl, HazardFan };
+export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch };
+export { makeFloorLabel, makeScreenTexture } from './core/label.js';
 
 /** Circuits the framework ships packs for. Mirrors python/src/madfly_lab/circuits.py. */
 export const CIRCUITS = {

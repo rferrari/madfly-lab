@@ -159,14 +159,18 @@ export class LabAvatar {
     // Compound eyes. Their emissive intensity is driven from each retina every
     // frame, so the LEFT mesh brightens when the LEFT eye sees something --
     // making the asymmetry that produces steering visible on the model itself.
-    this.eyeMeshes = [-1, 1].map((side) => {
+    // Mesh-local +X maps to the fly's LEFT (see Arena's heading convention:
+    // right = (-cos yaw, sin yaw), and local +X rotates to (cos yaw, -sin yaw)
+    // = -right). So index 0 must be +0.2 to be the LEFT eye -- it used to be
+    // -0.2, which lit the right-hand sphere when the left eye saw something.
+    this.eyeMeshes = ['L', 'R'].map((side) => {
       const eye = new THREE.Mesh(
         new THREE.SphereGeometry(0.16, 16, 12),
         new THREE.MeshStandardMaterial({
           color: id.eye, emissive: id.eye, emissiveIntensity: 1.4, roughness: 0.25,
         }),
       );
-      eye.position.set(side * 0.2, 0.1, 0.42);
+      eye.position.set((side === 'L' ? 1 : -1) * 0.2, 0.1, 0.42);
       group.add(eye);
       return eye;
     });

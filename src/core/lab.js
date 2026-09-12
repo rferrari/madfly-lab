@@ -90,6 +90,7 @@ export class MadFlyLab {
     if (i === -1) return false;
     this.stations.splice(i, 1);
     if (station.object3D) this.arena.remove(station.object3D);
+    if (station.labelMesh) this.arena.remove(station.labelMesh);
     station.detach();
     return true;
   }
@@ -99,6 +100,15 @@ export class MadFlyLab {
     object3D.position.copy(station.position);
     station.object3D = object3D;
     this.arena.add(object3D);
+
+    // Floor label is a sibling of the station, not a child: it must stay flat
+    // on the ground and level, while stations rotate to face the ring centre.
+    const label = station.buildLabel();
+    if (label) {
+      label.position.set(station.position.x, label.position.y, station.position.z + 2.2);
+      station.labelMesh = label;
+      this.arena.add(label);
+    }
     station.attach(this);
   }
 
@@ -263,7 +273,17 @@ export class MadFlyLab {
       station.position.set(Math.cos(a) * radius, station.position.y, Math.sin(a) * radius);
       if (station.object3D) {
         station.object3D.position.copy(station.position);
-        station.object3D.rotation.y = -a + Math.PI / 2;
+        // Face the ring centre. Mesh-local +Z is the station's front (same
+        // convention as the avatar), and atan2 gives the yaw that points it
+        // back toward the origin.
+        station.object3D.rotation.y = Math.atan2(-station.position.x, -station.position.z);
+      }
+      if (station.labelMesh) {
+        // Label sits just outside the station, pushed radially away from centre.
+        station.labelMesh.position.set(
+          Math.cos(a) * (radius + 2.4), station.labelMesh.position.y, Math.sin(a) * (radius + 2.4),
+        );
+        station.labelMesh.rotation.z = -a - Math.PI / 2;
       }
     });
     return this;

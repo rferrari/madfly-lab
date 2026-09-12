@@ -13,6 +13,7 @@
  */
 
 import * as THREE from 'three';
+import { makeFloorLabel } from './label.js';
 
 let nextId = 0;
 
@@ -38,10 +39,24 @@ export class Station {
     this._removeEmitter = null;
     this.elapsed = 0;
 
+    // Floor label: `label` is the title, `sublabel` the small line under it
+    // (by convention, which real neurons this station drives).
+    this.label = opts.label ?? null;
+    this.sublabel = opts.sublabel ?? null;
+    this.labelColor = opts.labelColor ?? null;
+
     this.onKick = opts.onKick ?? null;
     this.onEnter = opts.onEnter ?? null;
     this.onLeave = opts.onLeave ?? null;
     this.onTick = opts.onTick ?? null;
+  }
+
+  /** Floor plate naming this station. Returns null when no label was set. */
+  buildLabel() {
+    if (!this.label) return null;
+    return makeFloorLabel(this.label, this.sublabel ?? '', {
+      color: this.labelColor ?? undefined,
+    });
   }
 
   /** Subclass hook: return the station's THREE.Object3D. */

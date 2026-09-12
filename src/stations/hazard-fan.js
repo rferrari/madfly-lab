@@ -23,7 +23,11 @@ import { THEME } from '../core/theme.js';
 
 export class HazardFan extends Station {
   constructor(opts = {}) {
-    super({ name: 'Hazard Fan', kickRadius: 1.4, ...opts });
+    super({
+      name: 'Hazard Fan', kickRadius: 1.4,
+      label: 'HAZARD FAN', sublabel: 'looming → LC4_L / LC4_R · 202 real neurons',
+      labelColor: '#ff3355', ...opts,
+    });
     this.rotationSpeed = opts.rotationSpeed ?? 10;
     this.blades = opts.blades ?? 4;
     this.detectRadius = opts.detectRadius ?? 9;
@@ -42,22 +46,39 @@ export class HazardFan extends Station {
     post.castShadow = true;
     group.add(post);
 
+    // The rotor spins in a VERTICAL plane facing the fly, not flat like a
+    // ceiling fan. That is the whole point of a looming station: the blades
+    // have to sweep across the fly's visual field and grow as it approaches,
+    // so the motion-opponency detector sees radial expansion. A horizontal
+    // rotor is edge-on from ground level and produces almost no expansion.
     this.rotor = new THREE.Group();
-    this.rotor.position.y = 1.5;
+    this.rotor.position.set(0, 1.5, 0.12);
     const bladeMat = new THREE.MeshStandardMaterial({
       color: THEME.red, emissive: THEME.red, emissiveIntensity: 0.8,
       roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide,
     });
     for (let i = 0; i < this.blades; i++) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.04, 0.34), bladeMat);
-      blade.rotation.y = (i / this.blades) * Math.PI * 2;
-      blade.position.set(
-        Math.cos(blade.rotation.y) * 0.75, 0, -Math.sin(blade.rotation.y) * 0.75,
-      );
+      // Blades lie in the local XY plane; the rotor then spins about local Z,
+      // which points out of the fan's face toward the arena centre.
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.34, 0.04), bladeMat);
+      const a = (i / this.blades) * Math.PI * 2;
+      blade.rotation.z = a;
+      blade.position.set(Math.cos(a) * 0.75, Math.sin(a) * 0.75, 0);
       blade.castShadow = true;
       this.rotor.add(blade);
     }
     group.add(this.rotor);
+
+    // A hub disc so the centre of expansion is a solid, trackable feature.
+    const hub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.22, 0.12, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0x3a1020, emissive: THEME.red, emissiveIntensity: 0.5, metalness: 0.7,
+      }),
+    );
+    hub.rotation.x = Math.PI / 2;
+    hub.position.set(0, 1.5, 0.2);
+    group.add(hub);
 
     this.warn = new THREE.PointLight(THEME.red, 6, 8, 2);
     this.warn.position.y = 1.6;
@@ -66,7 +87,7 @@ export class HazardFan extends Station {
   }
 
   update(dt, ctx) {
-    if (this.rotor) this.rotor.rotation.y += this.rotationSpeed * dt;
+    if (this.rotor) this.rotor.rotation.z += this.rotationSpeed * dt;
 
     const distance = this.distanceTo(ctx.avatar.position);
     this.lastDistance = distance;

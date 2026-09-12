@@ -24,6 +24,11 @@ export const CAMERA_MODES = ['orbit', 'chase', 'eye', 'top'];
  */
 export const EYE_SPLAY = (40 * Math.PI) / 180;
 
+/** Half the distance between the two eyes, in arena units. */
+export const EYE_SEPARATION = 0.18;
+/** Eye height above the avatar's origin. */
+export const EYE_HEIGHT = 0.35;
+
 export class Arena {
   constructor({ canvas, size = 40, eyeResolution = [96, 64], eyeFov = 90 } = {}) {
     this.canvasSelector = canvas;
@@ -96,9 +101,43 @@ export class Arena {
     return this;
   }
 
+  /**
+   * Turn the lab lights on or off.
+   *
+   * Not a cosmetic toggle: the compound eyes sample the rendered frame, so
+   * killing the lights genuinely removes the fly's visual input, and the
+   * photoreceptor adaptation in CompoundEye then has to re-adapt to the dark.
+   * Emissive station surfaces (screens, glowing bowls) keep emitting, so a dark
+   * arena is exactly the condition where a screen dominates what the fly sees.
+   *
+   * @param {boolean} on
+   * @param {number} level  brightness when on, 0..1
+   */
+  setLights(on, level = 1) {
+    this.lightsOn = !!on;
+    const k = on ? level : 0;
+    for (const { light, base } of this._switchable) light.intensity = base * k;
+    // Background and fog follow the lights, or "off" would still show a lit sky.
+    const bg = on ? THEME.void : 0x02010a;
+    this.scene.background.setHex(bg);
+    this.scene.fog.color.setHex(bg);
+    return this;
+  }
+
+  toggleLights() { return this.setLights(!this.lightsOn); }
+
   _buildLights() {
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    this.scene.add(new THREE.HemisphereLight(THEME.violet, THEME.void, 0.8));
+    // Tracked so setLights() can scale them without clobbering their ratios.
+    this._switchable = [];
+    this.lightsOn = true;
+    const track = (light) => {
+      this._switchable.push({ light, base: light.intensity });
+      this.scene.add(light);
+      return light;
+    };
+
+    track(new THREE.AmbientLight(0xffffff, 0.55));
+    track(new THREE.HemisphereLight(THEME.violet, THEME.void, 0.8));
 
     const key = new THREE.DirectionalLight(0xffffff, 1.4);
     key.position.set(this.size * 0.5, this.size * 1.2, this.size * 0.4);
@@ -107,15 +146,15 @@ export class Arena {
     const s = this.size;
     Object.assign(key.shadow.camera, { near: 1, far: s * 4, left: -s, right: s, top: s, bottom: -s });
     key.shadow.bias = -0.0006;
-    this.scene.add(key);
+    track(key);
 
     // Two neon rim lights, matching the lab art's cyan/magenta key.
     const rimA = new THREE.PointLight(THEME.cyan, 40, this.size * 2, 2);
     rimA.position.set(-this.size * 0.5, 4, -this.size * 0.4);
-    this.scene.add(rimA);
+    track(rimA);
     const rimB = new THREE.PointLight(THEME.magenta, 40, this.size * 2, 2);
     rimB.position.set(this.size * 0.5, 4, this.size * 0.4);
-    this.scene.add(rimB);
+    track(rimB);
   }
 
   _buildFloor() {
@@ -222,18 +261,32 @@ export class Arena {
   renderEyes(avatar) {
     const [ew, eh] = this.eyeResolution;
     const out = {};
+    // Heading convention, stated once because getting it wrong is invisible:
+    //   forward = (sin yaw, 0, cos yaw)      -- matches LabAvatar.velocity
+    //   right   = forward x up = (-cos yaw, 0, sin yaw)
+    // A THREE.PerspectiveCamera looks down its LOCAL -Z, so rotation.y = yaw
+    // aims it at -forward. That is not a subtlety -- it means the fly's eyes
+    // face backwards. Verified: camera direction dotted with forward came out
+    // -1.00 at every yaw. The + Math.PI is what turns the eyes around.
+    const fx = Math.sin(avatar.yaw);
+    const fz = Math.cos(avatar.yaw);
+    const rx = -fz;   // right-hand direction
+    const rz = fx;
+
     for (const eye of this.eyes) {
+      // Positive splay rotates the view toward -right, i.e. toward the fly's
+      // left, so the LEFT eye takes +EYE_SPLAY.
       const splay = eye.side === 'L' ? EYE_SPLAY : -EYE_SPLAY;
-      // Eyes sit slightly apart on the head as well as pointing apart; the
-      // offset is small next to the splay but keeps the two views from being
-      // an exact mirror pair, which matters for the motion detectors.
-      const lateral = eye.side === 'L' ? -0.18 : 0.18;
+      // Eyes sit slightly apart on the head as well as pointing apart. The
+      // LEFT eye belongs at -right; this used to be mirrored, putting the left
+      // eye on the fly's right and quietly inverting every steering decision.
+      const lateral = eye.side === 'L' ? -EYE_SEPARATION : EYE_SEPARATION;
       eye.camera.position.set(
-        avatar.position.x + Math.cos(avatar.yaw) * lateral,
-        avatar.position.y + 0.35,
-        avatar.position.z - Math.sin(avatar.yaw) * lateral,
+        avatar.position.x + rx * lateral,
+        avatar.position.y + EYE_HEIGHT,
+        avatar.position.z + rz * lateral,
       );
-      eye.camera.rotation.set(0, avatar.yaw + splay, 0, 'YXZ');
+      eye.camera.rotation.set(0, avatar.yaw + Math.PI + splay, 0, 'YXZ');
 
       this.renderer.setRenderTarget(eye.target);
       this.renderer.render(this.scene, eye.camera);

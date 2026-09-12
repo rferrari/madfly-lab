@@ -63,6 +63,13 @@ sensors and obey real motor neurons.
 | **Olfactory receptors**, 4 glomeruli | `ORN_DM1/VA6/DA1/DA2` | 74 / 63 / 204 / 48 |
 | **Touch** — click the fly | `touch` (tactile) | 2,558 |
 
+Stations carry floor labels naming the real population each drives, and
+`arrangeInRing()` surrounds the fly rather than scattering stations into one
+quadrant. Built in: `Screen` (a canvas you can draw video or a game into, with a
+PAM11 payout), `Workstation` (screen + keyboard — type and the fly watches),
+`FoodBowl`, `HazardFan` (vertical rotor, so blades genuinely expand across the
+visual field), `LightSwitch` (removes visual input outright), `SlotMachine`.
+
 **Two eyes are not decoration.** The visual populations carry a real `somaSide`
 annotation, and it is functional: driving only the left `LPLC2` cells yields a
 `DNa01` steering signal of `1.1e-4`, driving only the right yields `1.5e-3` — a

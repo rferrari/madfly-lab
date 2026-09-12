@@ -115,6 +115,26 @@ failure mode that makes the whole thing worthless.
 
 ---
 
+## Heading convention — get this wrong and nothing tells you
+
+```
+forward = ( sin yaw, 0,  cos yaw)     // LabAvatar.velocity
+right   = (-cos yaw, 0,  sin yaw)     // forward x up
+```
+
+A `THREE.PerspectiveCamera` looks down its **local −Z**, so `camera.rotation.y =
+yaw` aims it at **−forward**. The eye cameras shipped that way, and the fly's
+eyes faced backwards for the entire first implementation — nothing in the HUD,
+the telemetry or the behaviour made it obvious. Eye cameras therefore use
+`yaw + Math.PI + splay`.
+
+A mesh's **local +Z** does map to forward under `rotation.y = yaw`, so station
+and avatar front-faces are +Z. But mesh **local +X** maps to `−right`, i.e. the
+fly's LEFT — the eye meshes were mirrored for the same reason.
+
+If you touch any of this, verify numerically: `camera.getWorldDirection(v)`
+dotted with forward must be positive. It was exactly `−1.00` before the fix.
+
 ## Two eyes, and why channel sides matter
 
 Visual populations carry a real `somaSide` annotation and respond asymmetrically
