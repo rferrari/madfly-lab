@@ -313,10 +313,22 @@ export class LabObserver {
     }
 
     if (this.retinaView && avatar.eyes) {
-      this.retinaView.draw(
-        { L: avatar.eyes.L.retina.response, R: avatar.eyes.R.retina.response },
-        { L: avatar.sensors.loomL, R: avatar.sensors.loomR },
-      );
+      // `avatar.eyes` exists regardless of genotype -- blindness is the
+      // `visionEnabled` flag, not the absence of eye objects, and the retina's
+      // own `.response` arrays are simply never written to while blind (the
+      // render loop skips `renderEyes()` entirely), not cleared. Reading them
+      // unconditionally here redrew whatever the LAST sighted frame happened
+      // to leave behind, forever, once a blind genotype was minted --
+      // `draw()` with no args (its own default) is what actually blanks the
+      // panel, since it falls back to 0 per-cell rather than a stale value.
+      if (avatar.visionEnabled) {
+        this.retinaView.draw(
+          { L: avatar.eyes.L.retina.response, R: avatar.eyes.R.retina.response },
+          { L: avatar.sensors.loomL, R: avatar.sensors.loomR },
+        );
+      } else {
+        this.retinaView.draw();
+      }
     }
 
     if (this.somaCloud) {

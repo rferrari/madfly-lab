@@ -23,16 +23,20 @@ export class TrainingHUD {
       { key: 'qStand', label: 'Q(Stand)', color: CSS.lime, history: new Float32Array(HISTORY), signed: true },
     ];
     this.head = 0;
-    this.badge = { trials: 0, successRate: 0, decisionState: 'IDLE' };
+    this.badge = { trials: 0, successRate: 0, decisionState: 'IDLE', wins: 0, losses: 0 };
   }
 
   mount() {
     const root = document.createElement('div');
     root.className = 'madfly-training-hud';
     Object.assign(root.style, {
-      position: 'fixed', bottom: '0', left: '0', width: '260px',
+      // `bottom: 64px`, not `0` -- this panel grew a control-button row taller
+      // than the free-standing `#log` toast (examples/hello-lab.js, fixed at
+      // bottom:16px/left:16px) expects to share the corner with; flush-bottom
+      // made the two visually collide (buttons overlapped by the log text).
+      position: 'fixed', bottom: '64px', left: '0', width: '320px',
       padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px',
-      font: `11px ${CSS.font}`, color: CSS.bone, pointerEvents: 'none', zIndex: '10',
+      font: `11px ${CSS.font}`, color: CSS.bone, zIndex: '10',
     });
 
     const panel = document.createElement('div');
@@ -46,7 +50,7 @@ export class TrainingHUD {
     panel.appendChild(title);
 
     this.canvas = document.createElement('canvas');
-    this.canvas.width = 236;
+    this.canvas.width = 274;
     this.canvas.height = 130;
     Object.assign(this.canvas.style, { width: '100%', display: 'block', borderRadius: '4px' });
     panel.appendChild(this.canvas);
@@ -55,11 +59,56 @@ export class TrainingHUD {
     this.badgeEl.style.cssText = `margin-top:6px;font-size:10px;line-height:1.6;color:${CSS.dim}`;
     panel.appendChild(this.badgeEl);
 
+    // A one-line, non-wrapping status flash (see `flash()`) -- separate from
+    // badgeEl so a transient "Skill copied" message can't itself change the
+    // panel's height.
+    this.flashEl = document.createElement('div');
+    this.flashEl.style.cssText = `margin-top:4px;font-size:10px;color:${CSS.cyan};height:14px;`
+      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    panel.appendChild(this.flashEl);
+
+    // Control buttons -- a real grid, not flex-wrap: flex-wrap's row count
+    // (and therefore the panel's total height) depends on exact pixel widths
+    // and silently reflows when a browser's font metrics differ by a pixel; a
+    // fixed 3-column grid gives every button the same row/height regardless.
+    this.btnRow = document.createElement('div');
+    this.btnRow.style.cssText = 'display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-top:8px;';
+    panel.appendChild(this.btnRow);
+
     root.appendChild(panel);
     this.container.appendChild(root);
     this.root = root;
     this.ctx = this.canvas.getContext('2d');
     return this;
+  }
+
+  /** Add a control button. Returns the button element. */
+  addButton(label, onClick, variant = 'primary') {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.style.cssText = `
+      padding:6px 4px;font:9px ${CSS.font};line-height:1.3;border-radius:4px;cursor:pointer;
+      background:${variant === 'primary' ? CSS.violet : CSS.panel};
+      color:${variant === 'primary' ? '#fff' : CSS.bone};
+      border:${variant === 'primary' ? 'none' : `1px solid ${CSS.border}`};
+    `;
+    btn.onclick = onClick;
+    this.btnRow.appendChild(btn);
+    return btn;
+  }
+
+  /** Remove all control buttons. */
+  clearButtons() {
+    this.btnRow.innerHTML = '';
+  }
+
+  /** A brief, non-blocking status message (replaces alert()/confirm(), which
+   * would freeze the render loop -- it and this panel share one JS thread). */
+  flash(message, ms = 2400) {
+    if (!this.flashEl) return;
+    this.flashEl.textContent = message;
+    clearTimeout(this._flashTimer);
+    this._flashTimer = setTimeout(() => { this.flashEl.textContent = ''; }, ms);
   }
 
   /** @param {{pam11?:number, ppl1?:number, qHit?:number, qStand?:number}} sample */
@@ -70,8 +119,8 @@ export class TrainingHUD {
     this.head = (this.head + 1) % HISTORY;
   }
 
-  setBadge({ trials, successRate, decisionState }) {
-    this.badge = { trials, successRate, decisionState };
+  setBadge({ trials, successRate, decisionState, wins, losses, evaluating, evalStats }) {
+    this.badge = { trials, successRate, decisionState, wins, losses, evaluating, evalStats };
   }
 
   update() {
@@ -125,11 +174,25 @@ export class TrainingHUD {
 
     if (this.badgeEl) {
       const b = this.badge;
-      this.badgeEl.innerHTML = [
-        `<span style="color:${CSS.dim}">success</span> ${(b.successRate * 100).toFixed(1)}%`,
+      const lines = [
+        `<span style="color:${CSS.dim}">success</span> ${(b.successRate * 100).toFixed(1)}%`
+          + (b.wins != null ? ` <span style="color:${CSS.dim}">(${b.wins}W/${b.losses ?? 0}L)</span>` : ''),
         `<span style="color:${CSS.dim}">trials</span> ${b.trials}`,
-        `<span style="color:${CSS.amber}">${b.decisionState}</span>`,
-      ].join('<br>');
+      ];
+      if (b.evaluating) {
+        const evalPct = (b.evalStats?.trials ? (b.evalStats.wins / b.evalStats.trials) * 100 : 0).toFixed(1);
+        lines.push(`<span style="color:${CSS.cyan}">▶ PLAYING LEARNED POLICY</span> — `
+          + `${evalPct}% <span style="color:${CSS.dim}">(${b.evalStats?.trials ?? 0} hands, weights frozen)</span>`);
+      }
+      // Its own non-wrapping, height-fixed line: `decisionState`'s text length
+      // varies every ~350ms tick ("IDLE" vs a full "[Q-LEARNING] total=18
+      // dealer=6 soft -> STAND"), and letting THAT reflow inside a variable-
+      // height block was what made the whole panel (and the button row below
+      // it) visibly jitter tick to tick -- ellipsis-truncate it instead of
+      // letting it change how tall anything is.
+      lines.push(`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${CSS.amber}">`
+        + `${b.decisionState}</div>`);
+      this.badgeEl.innerHTML = lines.join('<br>');
     }
   }
 

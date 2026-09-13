@@ -36,6 +36,9 @@ import { buildTetheredRig, frameTetheredCamera } from '../rooms/tethered-rig.js'
 
 const MAX_CATCHUP_STEPS = 4;
 
+/** See setRoom()'s 'tethered-rig' branch. */
+const TETHERED_AVATAR_SCALE = 0.55;
+
 /** Half-width of the sensor block, for collision resolution. */
 const AVATAR_RADIUS = 0.35;
 
@@ -84,7 +87,7 @@ export class MadFlyLab {
     this.running = false;
     this._accumulator = 0;
     this._lastFrame = 0;
-    this._hooks = { beforeStep: [], afterStep: [], poke: [], bump: [] };
+    this._hooks = { beforeStep: [], afterStep: [], poke: [], bump: [], frame: [] };
 
     // Screen recording will be initialized after arena is created
     this.screenRecorder = null;
@@ -135,6 +138,16 @@ export class MadFlyLab {
   /** Run `fn(dt, lab)` every brain tick, before or after the network steps. */
   onBeforeStep(fn) { this._hooks.beforeStep.push(fn); return this; }
   onAfterStep(fn) { this._hooks.afterStep.push(fn); return this; }
+
+  /**
+   * Run `fn(frameDt, lab)` once per RENDERED frame (not per brain tick --
+   * see onBeforeStep/onAfterStep for that), after the frame's render and
+   * observer update. For scene glue that needs to animate something every
+   * frame regardless of which room is active (e.g. examples/optogenetics/'s
+   * hover-halo pulse); the hook itself is room-agnostic, callers gate their
+   * own logic on `lab.room`.
+   */
+  onFrame(fn) { this._hooks.frame.push(fn); return this; }
 
   async start() {
     this.arena.init();
@@ -217,6 +230,20 @@ export class MadFlyLab {
   onPoke(fn) { this._hooks.poke.push(fn); return this; }
 
   stop() { this.running = false; }
+
+  /**
+   * Resume the render/brain loop after `stop()`. Safe to call when already
+   * running (no-op). Resets `_lastFrame` to now -- otherwise the first frame
+   * after an arbitrarily long pause would compute a huge `frameDt` (clamped
+   * to 0.25s by `_loop` regardless, but resetting is the honest fix rather
+   * than relying on the clamp).
+   */
+  resume() {
+    if (this.running) return;
+    this.running = true;
+    this._lastFrame = performance.now();
+    requestAnimationFrame(this._loop);
+  }
 
   /**
    * Keyboard bindings for screen recording:
@@ -343,7 +370,7 @@ export class MadFlyLab {
     if (steps === MAX_CATCHUP_STEPS) this._accumulator = 0;
 
     if (this.room === 'tethered-rig') {
-      frameTetheredCamera(this.arena.camera);
+      frameTetheredCamera(this.arena);
       if (this._tetheredRig) {
         this._tetheredRig.orb.update(
           this.brain.runtime?.activationView?.(), frameDt, this.brain.runtime?.cloud,
@@ -356,6 +383,7 @@ export class MadFlyLab {
     }
     this.arena.render();
     this.observer?.update(this, frameDt);
+    for (const fn of this._hooks.frame) fn(frameDt, this);
 
     // Capture frame for recording
     if (this.screenRecorder.isRecording) {
@@ -536,6 +564,9 @@ export class MadFlyLab {
   /** The scripted leg-gesture rig, while Room 2 is active; otherwise null. */
   get legRig() { return this._tetheredRig?.legRig ?? null; }
 
+  /** Room 2's floating brain point-cloud (BrainOrb), while active; otherwise null. */
+  get brainOrb() { return this._tetheredRig?.orb ?? null; }
+
   /** Cycle through the circuits the framework ships packs for. */
   async cycleCircuit() {
     const names = Object.keys(CIRCUITS);
@@ -585,6 +616,13 @@ export class MadFlyLab {
 
       this.avatar.tethered = true;
       this.avatar.reset([0, 0.42, 0], 0);
+      // Room 2's rig (platform ball, dock) is built at a small, fixed scale
+      // (see rooms/tethered-rig.js) -- the avatar's normal free-roaming size
+      // (tuned to read well in a 17-40 unit arena) visually swallowed it and
+      // the scripted leg gestures along with it. Shrink just for this room;
+      // restored exactly on the way back out below.
+      this._avatarScaleBeforeTether = this.avatar.object3D.scale.x;
+      this.avatar.object3D.scale.setScalar(this._avatarScaleBeforeTether * TETHERED_AVATAR_SCALE);
       // Vision is switched off in the tethered rig by default: this room's
       // reference task (see examples/blackjack/) drives the brain purely
       // through olfactory channels, deliberately -- "visual input was tried
@@ -615,6 +653,10 @@ export class MadFlyLab {
         this._tetheredRig = null;
       }
       this.avatar.tethered = false;
+      if (this._avatarScaleBeforeTether != null) {
+        this.avatar.object3D.scale.setScalar(this._avatarScaleBeforeTether);
+        this._avatarScaleBeforeTether = null;
+      }
       if (this._savedRoom1) {
         this.stations = this._savedRoom1.stations;
         for (const station of this.stations) this._spawn(station);

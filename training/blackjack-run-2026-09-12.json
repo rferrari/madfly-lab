@@ -1,0 +1,470 @@
+{
+  "episodes": 1500,
+  "pack": "courtship",
+  "featureChannels": [
+    "DNa01_L",
+    "DNa01_R",
+    "DNp03",
+    "DNp13"
+  ],
+  "results": [
+    {
+      "seed": 1,
+      "checkpoints": [
+        {
+          "episode": 75,
+          "trials": 75,
+          "wins": 22,
+          "losses": 51,
+          "pushes": 2,
+          "successRate": 0.29333333333333333
+        },
+        {
+          "episode": 150,
+          "trials": 150,
+          "wins": 49,
+          "losses": 93,
+          "pushes": 8,
+          "successRate": 0.32666666666666666
+        },
+        {
+          "episode": 225,
+          "trials": 225,
+          "wins": 80,
+          "losses": 131,
+          "pushes": 14,
+          "successRate": 0.35555555555555557
+        },
+        {
+          "episode": 300,
+          "trials": 300,
+          "wins": 114,
+          "losses": 169,
+          "pushes": 17,
+          "successRate": 0.38
+        },
+        {
+          "episode": 375,
+          "trials": 375,
+          "wins": 146,
+          "losses": 209,
+          "pushes": 20,
+          "successRate": 0.3893333333333333
+        },
+        {
+          "episode": 450,
+          "trials": 450,
+          "wins": 175,
+          "losses": 250,
+          "pushes": 25,
+          "successRate": 0.3888888888888889
+        },
+        {
+          "episode": 525,
+          "trials": 525,
+          "wins": 199,
+          "losses": 298,
+          "pushes": 28,
+          "successRate": 0.379047619047619
+        },
+        {
+          "episode": 600,
+          "trials": 600,
+          "wins": 231,
+          "losses": 338,
+          "pushes": 31,
+          "successRate": 0.385
+        },
+        {
+          "episode": 675,
+          "trials": 675,
+          "wins": 251,
+          "losses": 390,
+          "pushes": 34,
+          "successRate": 0.3718518518518519
+        },
+        {
+          "episode": 750,
+          "trials": 750,
+          "wins": 282,
+          "losses": 431,
+          "pushes": 37,
+          "successRate": 0.376
+        },
+        {
+          "episode": 825,
+          "trials": 825,
+          "wins": 303,
+          "losses": 480,
+          "pushes": 42,
+          "successRate": 0.36727272727272725
+        },
+        {
+          "episode": 900,
+          "trials": 900,
+          "wins": 331,
+          "losses": 525,
+          "pushes": 44,
+          "successRate": 0.36777777777777776
+        },
+        {
+          "episode": 975,
+          "trials": 975,
+          "wins": 354,
+          "losses": 573,
+          "pushes": 48,
+          "successRate": 0.3630769230769231
+        },
+        {
+          "episode": 1050,
+          "trials": 1050,
+          "wins": 385,
+          "losses": 616,
+          "pushes": 49,
+          "successRate": 0.36666666666666664
+        },
+        {
+          "episode": 1125,
+          "trials": 1125,
+          "wins": 408,
+          "losses": 666,
+          "pushes": 51,
+          "successRate": 0.3626666666666667
+        },
+        {
+          "episode": 1200,
+          "trials": 1200,
+          "wins": 431,
+          "losses": 713,
+          "pushes": 56,
+          "successRate": 0.3591666666666667
+        },
+        {
+          "episode": 1275,
+          "trials": 1275,
+          "wins": 458,
+          "losses": 755,
+          "pushes": 62,
+          "successRate": 0.3592156862745098
+        },
+        {
+          "episode": 1350,
+          "trials": 1350,
+          "wins": 486,
+          "losses": 799,
+          "pushes": 65,
+          "successRate": 0.36
+        },
+        {
+          "episode": 1425,
+          "trials": 1425,
+          "wins": 514,
+          "losses": 841,
+          "pushes": 70,
+          "successRate": 0.3607017543859649
+        },
+        {
+          "episode": 1500,
+          "trials": 1500,
+          "wins": 541,
+          "losses": 884,
+          "pushes": 75,
+          "successRate": 0.3606666666666667
+        }
+      ],
+      "policy": [
+        {
+          "label": "hard 16 vs 10 (textbook: HIT)",
+          "qHit": -0.6121261234709149,
+          "qStand": -0.11048930115157547,
+          "greedy": "stand",
+          "features": [
+            0.2299,
+            0.1304,
+            0.001,
+            0.0318
+          ]
+        },
+        {
+          "label": "hard 12 vs 4 (textbook: STAND)",
+          "qHit": -0.595657957832029,
+          "qStand": -0.15372310530117192,
+          "greedy": "stand",
+          "features": [
+            0.1292,
+            0.0707,
+            0.0006,
+            0.0178
+          ]
+        },
+        {
+          "label": "soft 18 vs 6 (textbook: STAND/double)",
+          "qHit": -0.6308309650305244,
+          "qStand": -0.06170861343462203,
+          "greedy": "stand",
+          "features": [
+            0.3318,
+            0.2219,
+            0.0016,
+            0.0483
+          ]
+        },
+        {
+          "label": "hard 20 vs 10 (textbook: STAND)",
+          "qHit": -0.6161960584062944,
+          "qStand": -0.099778329023683,
+          "greedy": "stand",
+          "features": [
+            0.2558,
+            0.1431,
+            0.0011,
+            0.0353
+          ]
+        },
+        {
+          "label": "hard 8 vs 5 (textbook: HIT)",
+          "qHit": -0.5935049444138892,
+          "qStand": -0.15940455087216016,
+          "greedy": "stand",
+          "features": [
+            0.1149,
+            0.0652,
+            0.0005,
+            0.0159
+          ]
+        }
+      ],
+      "finalSuccessRate": 0.3606666666666667,
+      "finalTrials": 1500
+    },
+    {
+      "seed": 2,
+      "checkpoints": [
+        {
+          "episode": 75,
+          "trials": 75,
+          "wins": 26,
+          "losses": 43,
+          "pushes": 6,
+          "successRate": 0.3466666666666667
+        },
+        {
+          "episode": 150,
+          "trials": 150,
+          "wins": 63,
+          "losses": 78,
+          "pushes": 9,
+          "successRate": 0.42
+        },
+        {
+          "episode": 225,
+          "trials": 225,
+          "wins": 102,
+          "losses": 108,
+          "pushes": 15,
+          "successRate": 0.4533333333333333
+        },
+        {
+          "episode": 300,
+          "trials": 300,
+          "wins": 123,
+          "losses": 160,
+          "pushes": 17,
+          "successRate": 0.41
+        },
+        {
+          "episode": 375,
+          "trials": 375,
+          "wins": 146,
+          "losses": 206,
+          "pushes": 23,
+          "successRate": 0.3893333333333333
+        },
+        {
+          "episode": 450,
+          "trials": 450,
+          "wins": 171,
+          "losses": 251,
+          "pushes": 28,
+          "successRate": 0.38
+        },
+        {
+          "episode": 525,
+          "trials": 525,
+          "wins": 201,
+          "losses": 289,
+          "pushes": 35,
+          "successRate": 0.38285714285714284
+        },
+        {
+          "episode": 600,
+          "trials": 600,
+          "wins": 231,
+          "losses": 329,
+          "pushes": 40,
+          "successRate": 0.385
+        },
+        {
+          "episode": 675,
+          "trials": 675,
+          "wins": 264,
+          "losses": 368,
+          "pushes": 43,
+          "successRate": 0.39111111111111113
+        },
+        {
+          "episode": 750,
+          "trials": 750,
+          "wins": 291,
+          "losses": 408,
+          "pushes": 51,
+          "successRate": 0.388
+        },
+        {
+          "episode": 825,
+          "trials": 825,
+          "wins": 311,
+          "losses": 461,
+          "pushes": 53,
+          "successRate": 0.37696969696969695
+        },
+        {
+          "episode": 900,
+          "trials": 900,
+          "wins": 334,
+          "losses": 511,
+          "pushes": 55,
+          "successRate": 0.3711111111111111
+        },
+        {
+          "episode": 975,
+          "trials": 975,
+          "wins": 360,
+          "losses": 555,
+          "pushes": 60,
+          "successRate": 0.36923076923076925
+        },
+        {
+          "episode": 1050,
+          "trials": 1050,
+          "wins": 388,
+          "losses": 597,
+          "pushes": 65,
+          "successRate": 0.36952380952380953
+        },
+        {
+          "episode": 1125,
+          "trials": 1125,
+          "wins": 420,
+          "losses": 635,
+          "pushes": 70,
+          "successRate": 0.37333333333333335
+        },
+        {
+          "episode": 1200,
+          "trials": 1200,
+          "wins": 446,
+          "losses": 680,
+          "pushes": 74,
+          "successRate": 0.37166666666666665
+        },
+        {
+          "episode": 1275,
+          "trials": 1275,
+          "wins": 473,
+          "losses": 725,
+          "pushes": 77,
+          "successRate": 0.37098039215686274
+        },
+        {
+          "episode": 1350,
+          "trials": 1350,
+          "wins": 504,
+          "losses": 767,
+          "pushes": 79,
+          "successRate": 0.37333333333333335
+        },
+        {
+          "episode": 1425,
+          "trials": 1425,
+          "wins": 535,
+          "losses": 809,
+          "pushes": 81,
+          "successRate": 0.37543859649122807
+        },
+        {
+          "episode": 1500,
+          "trials": 1500,
+          "wins": 562,
+          "losses": 856,
+          "pushes": 82,
+          "successRate": 0.37466666666666665
+        }
+      ],
+      "policy": [
+        {
+          "label": "hard 16 vs 10 (textbook: HIT)",
+          "qHit": -0.6478528825242049,
+          "qStand": -0.3728952310738381,
+          "greedy": "stand",
+          "features": [
+            0.2299,
+            0.1304,
+            0.001,
+            0.0318
+          ]
+        },
+        {
+          "label": "hard 12 vs 4 (textbook: STAND)",
+          "qHit": -0.6318824194180492,
+          "qStand": -0.41329613317247615,
+          "greedy": "stand",
+          "features": [
+            0.1292,
+            0.0707,
+            0.0006,
+            0.0178
+          ]
+        },
+        {
+          "label": "soft 18 vs 6 (textbook: STAND/double)",
+          "qHit": -0.6659153167193714,
+          "qStand": -0.32686171641001116,
+          "greedy": "stand",
+          "features": [
+            0.3318,
+            0.2219,
+            0.0016,
+            0.0483
+          ]
+        },
+        {
+          "label": "hard 20 vs 10 (textbook: STAND)",
+          "qHit": -0.6517948995853136,
+          "qStand": -0.36295255122633807,
+          "greedy": "stand",
+          "features": [
+            0.2558,
+            0.1431,
+            0.0011,
+            0.0353
+          ]
+        },
+        {
+          "label": "hard 8 vs 5 (textbook: HIT)",
+          "qHit": -0.6297903494732789,
+          "qStand": -0.4185549302562981,
+          "greedy": "stand",
+          "features": [
+            0.1149,
+            0.0652,
+            0.0005,
+            0.0159
+          ]
+        }
+      ],
+      "finalSuccessRate": 0.37466666666666665,
+      "finalTrials": 1500
+    }
+  ]
+}

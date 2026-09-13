@@ -103,6 +103,20 @@ export class QReadout {
   }
 
   get successRate() { return this.trials > 0 ? this.wins / this.trials : 0; }
+
+  /** Serialize the learned policy for transfer to another fly. */
+  save() {
+    return JSON.stringify({ weights: this.weights, trials: this.trials, wins: this.wins, losses: this.losses, pushes: this.pushes });
+  }
+
+  /** Restore a QReadout from a saved policy. */
+  static load(json) {
+    const { weights, trials, wins, losses, pushes } = JSON.parse(json);
+    const q = new QReadout(weights.hit.length - 1); // -1 for bias
+    q.weights = weights;
+    q.trials = trials; q.wins = wins; q.losses = losses; q.pushes = pushes;
+    return q;
+  }
 }
 
 function seededRandom(seed) {

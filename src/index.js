@@ -57,6 +57,8 @@ export { SomaCloud } from './observer/soma-cloud.js';
 export { Telemetry } from './observer/telemetry.js';
 export { BrainOrb } from './observer/brain-orb.js';
 export { TrainingHUD } from './observer/training-hud.js';
+export { BrainRaycaster, DEFAULT_POINTS_THRESHOLD } from './observer/brain-raycaster.js';
+export { BrainHalo } from './observer/brain-halo.js';
 
 import { Station as StationBase } from './core/station.js';
 import { SlotMachine } from './stations/slot-machine.js';
@@ -94,7 +96,10 @@ export { CIRCUITS } from './circuits.js';
 // (task-agnostic) sense->settle->read->decide->act->learn loop and its
 // linear TD-learning readout. Task-specific content (blackjack, or whatever
 // else a scene trains on) is NOT exported here -- see examples/blackjack/.
-export { buildTetheredRig, frameTetheredCamera, PLATFORM_POSITION, DOCK_POSITION, ORB_POSITION } from './rooms/tethered-rig.js';
+export {
+  buildTetheredRig, frameTetheredCamera,
+  PLATFORM_POSITION, DOCK_POSITION, ORB_POSITION, TETHERED_BASE_POSITION,
+} from './rooms/tethered-rig.js';
 export { LegRig } from './avatar/leg-rig.js';
 export { TrainingLoop, QReadout, ACTIONS } from './training/training-loop.js';
 

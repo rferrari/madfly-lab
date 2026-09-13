@@ -1,10 +1,12 @@
 /**
- * CardTable -- Room 2's equipment dock for the blackjack task: a small
- * fly-sized table with a canvas-textured display showing the current hand,
- * the fly's decision, and the live Q-values. This is a plain `Station`
- * (framework base class), so it plugs into the same `addStation()` / label /
- * lifecycle machinery as any Room 1 station -- only the drawing on its screen
- * is blackjack-specific.
+ * CardTable -- Room 2's equipment dock for the blackjack task: just a
+ * floating screen directly in front of the fly, with a canvas-textured
+ * display showing the current hand, the fly's decision, and the live
+ * Q-values (no desk, no stand -- earlier versions had both, removed as
+ * unnecessary set dressing). This is a plain `Station` (framework base
+ * class), so it plugs into the same `addStation()` / label / lifecycle
+ * machinery as any Room 1 station -- only the drawing on its screen is
+ * blackjack-specific.
  *
  * Sized to sit at `DOCK_POSITION` from rooms/tethered-rig.js, in front of the
  * tethered platform.
@@ -28,56 +30,71 @@ export class CardTable extends Station {
   build() {
     const group = new THREE.Group();
 
-    const top = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.06, 0.9),
-      new THREE.MeshStandardMaterial({ color: 0x0d3d24, roughness: 0.8 }),
-    );
-    top.position.y = 0.75;
-    top.castShadow = true;
-    top.receiveShadow = true;
-    group.add(top);
+    // Hidden for now (position/angle kept tuned, just not shown -- flip this
+    // back to `true` to bring the in-world screen back). The canvas/texture
+    // still get built and `_render()` still runs every tick either way, so
+    // re-enabling is exactly this one flag, nothing else to wire back up.
+    const SHOW_SCREEN = false;
 
-    for (const [x, z] of [[-0.65, 0.4], [0.65, 0.4], [-0.65, -0.4], [0.65, -0.4]]) {
-      const leg = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.03, 0.03, 0.75, 8),
-        new THREE.MeshStandardMaterial({ color: 0x1a1030, roughness: 0.5 }),
-      );
-      leg.position.set(x, 0.375, z);
-      group.add(leg);
-    }
+    // No desk, no stand -- just the screen, floating directly in front of
+    // the fly.
+    const SCREEN_Y = 1.05;
 
     const { canvas, ctx, texture } = makeScreenTexture(480, 300);
     this.canvas = canvas;
     this.ctx = ctx;
     this.texture = texture;
 
+    // Tilted up and back, like a console angled toward whoever's standing
+    // over it -- not a flat-vertical monitor. (`90` was left here from an
+    // in-browser experiment -- three.js rotations are radians, so that was
+    // an accidental ~14.3 turns, not "90 degrees.") Bezel and panel MUST
+    // share this exact value, not just similar-looking literals: tilting a
+    // plane about X shifts its world Z by roughly halfHeight * sin(tilt)
+    // between its top and bottom edge (~0.3 * sin(0.5) ~= 0.14 at this
+    // angle). Two surfaces tilted by DIFFERENT amounts (or opposite signs)
+    // diverge in Z across their own height, so a clearance measured only at
+    // their centres can still have them crossing/overlapping near one edge --
+    // which is exactly what silently broke this before: the two used to tilt
+    // by +0.25/-0.25 (opposite signs), which was fine at the very centre but
+    // let the bezel's opaque front face swing in front of the screen for
+    // most of its height, hiding all but a thin sliver of text. Verified
+    // empirically at this specific angle+clearance combo (headless-render):
+    // full canvas content visible, no occlusion.
+    const SCREEN_TILT = 0.5;
+
     const bezel = new THREE.Mesh(
-      new THREE.BoxGeometry(0.85, 0.55, 0.04),
+      new THREE.BoxGeometry(1.05, 0.68, 0.04),
       new THREE.MeshStandardMaterial({ color: 0x140a24, roughness: 0.4, metalness: 0.6 }),
     );
-    bezel.position.set(0, 1.3, -0.35);
-    bezel.rotation.x = -0.25;
-    group.add(bezel);
+    bezel.position.set(0, SCREEN_Y, -0.35);
+    bezel.rotation.x = SCREEN_TILT;
+    if (SHOW_SCREEN) group.add(bezel);
 
     this.panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.78, 0.48),
+      new THREE.PlaneGeometry(0.98, 0.6),
       new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
     );
-    // 0.02 clear of the bezel's own front face (centre -0.35, half-depth 0.02
-    // -> front face at -0.33): the two used to sit EXACTLY coplanar, so the
-    // opaque bezel z-fought with (and won against) the screen, rendering as a
-    // solid near-black rectangle no matter what was drawn on the canvas.
-    this.panel.position.set(0, 1.3, -0.31);
-    // A PlaneGeometry's default normal faces local +Z. This screen sits on
-    // the NEGATIVE-z side of the table (closer to the platform, which the fly
-    // occupies at smaller world z), so its front face needs to look back
-    // toward -Z, not the default +Z -- otherwise the fly sees the plane's
-    // culled BACK (invisible) with the dark, opaque bezel box showing through
-    // behind it, which looks identical to "the texture is black" even though
-    // the canvas itself was always painting correctly.
-    this.panel.rotation.y = Math.PI;
-    this.panel.rotation.x = 0.25;
-    group.add(this.panel);
+    // 0.12+ clear of the bezel's own front face, on whichever side the whole
+    // group's local +Z ends up facing once placed (see tethered-scene.js --
+    // it rotates this group to face the viewer, not a fixed world direction,
+    // so "front" here means +Z, not a hardcoded -Z as an earlier version
+    // assumed). A mere 0.02 -- measured only at the centre, ignoring the
+    // tilt-driven divergence noted above -- let the bezel win the depth test
+    // over ~85% of the screen's height. Verified empirically (headless-render
+    // A/B: hiding the bezel outright revealed the full, correctly-drawn
+    // canvas; matching the tilt with only 0.02 clearance still rendered solid
+    // black; this clearance is what actually cleared it).
+    this.panel.position.set(0, SCREEN_Y, -0.21);
+    // A PlaneGeometry's default normal faces local +Z -- deliberately left
+    // alone here (no rotation.y) so this whole group's local +Z is "the
+    // direction the screen faces." Whoever places this station (see
+    // examples/blackjack/tethered-scene.js) rotates the GROUP to aim that at
+    // whichever real-world direction it wants the screen readable from (the
+    // viewer, not the fly -- see that file for why), rather than this file
+    // hardcoding an assumption about where the camera/fly will be.
+    this.panel.rotation.x = SCREEN_TILT;
+    if (SHOW_SCREEN) group.add(this.panel);
 
     this._render({ playerTotal: 0, dealerUpcard: 0, usableAce: false }, null, 'IDLE', {});
     return group;

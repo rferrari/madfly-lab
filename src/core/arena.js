@@ -64,6 +64,47 @@ export class Arena {
     this.eyeResolution = eyeResolution;
 
     this._orbit = { theta: Math.PI * 0.25, phi: Math.PI * 0.32, radius: size * 0.9, dragging: false };
+
+    // Right-click-drag rotate + scroll zoom, layered on TOP of whichever
+    // camera mode/room is active (chase, top, or Room 2's fixed rig framing)
+    // rather than being its own mode -- so it works everywhere without having
+    // to switch modes first. Left-click stays free for poke/interact in every
+    // room; see `_bindInput()` for why only `button === 2` engages this.
+    this._userLook = { yaw: 0, pitch: 0, zoom: 1, dragging: false, lastX: 0, lastY: 0 };
+  }
+
+  /**
+   * Orbit the camera around `target`, starting from `basePosition`, offset by
+   * the player's accumulated right-click-drag/scroll input. Called once per
+   * frame by every camera mode (and by Room 2's fixed rig framing) so a
+   * free-look nudge works the same way regardless of which mode/room set
+   * `basePosition` -- the mode/room only need to say "where would the camera
+   * sit with no player input", not know anything about `_userLook` itself.
+   */
+  orbitAround(target, basePosition) {
+    const offset = basePosition.clone().sub(target);
+    const radius = offset.length() * this._userLook.zoom;
+    // Spherical angles of the BASE offset, so the player's yaw/pitch are a
+    // delta on top of whatever the mode already intended (e.g. chase's
+    // behind-the-fly framing), not a full override starting from scratch.
+    const baseYaw = Math.atan2(offset.x, offset.z);
+    const basePitch = Math.asin(clamp(offset.y / (offset.length() || 1), -1, 1));
+    const yaw = baseYaw + this._userLook.yaw;
+    const pitch = clamp(basePitch + this._userLook.pitch, -1.45, 1.45);
+    const cosPitch = Math.cos(pitch);
+    this.camera.position.set(
+      target.x + radius * cosPitch * Math.sin(yaw),
+      target.y + radius * Math.sin(pitch),
+      target.z + radius * cosPitch * Math.cos(yaw),
+    );
+    this.camera.lookAt(target);
+  }
+
+  /** Reset the right-click free-look back to neutral (e.g. on room/camera switch). */
+  resetUserLook() {
+    this._userLook.yaw = 0;
+    this._userLook.pitch = 0;
+    this._userLook.zoom = 1;
   }
 
   init() {
@@ -286,7 +327,35 @@ export class Arena {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       this._orbit.radius = clamp(this._orbit.radius * (1 + e.deltaY * 0.001), 3, this.size * 3);
+      this._userLook.zoom = clamp(this._userLook.zoom * (1 + e.deltaY * 0.001), 0.35, 3);
     }, { passive: false });
+
+    // Right-click-drag free-look, independent of the dedicated 'orbit' camera
+    // mode above: `button === 2` keeps left-click free for poke/interact
+    // (avatar touch, optogenetics stimulation) in every room. Separate
+    // listeners rather than folding into the ones above so the existing
+    // 'orbit' mode's any-button drag is untouched.
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 2) return;
+      this._userLook.dragging = true;
+      this._userLook.lastX = e.clientX;
+      this._userLook.lastY = e.clientY;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointerup', (e) => {
+      if (e.button !== 2) return;
+      this._userLook.dragging = false;
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!this._userLook.dragging) return;
+      this._userLook.yaw -= (e.clientX - this._userLook.lastX) * 0.006;
+      this._userLook.pitch = clamp(
+        this._userLook.pitch - (e.clientY - this._userLook.lastY) * 0.006, -1.45, 1.45,
+      );
+      this._userLook.lastX = e.clientX;
+      this._userLook.lastY = e.clientY;
+    });
   }
 
   add(object3D) { this.scene.add(object3D); return object3D; }
@@ -324,14 +393,19 @@ export class Arena {
         p.y + 3.2,
         p.z - Math.cos(avatar.yaw) * back,
       );
-      this.camera.position.lerp(target, 0.12);
-      this.camera.lookAt(p.x, p.y + 0.4, p.z);
+      // Smoothed separately from `this.camera.position`: that now holds the
+      // FINAL, already-orbited position, so lerping it directly toward
+      // `target` would fight the player's right-click offset every frame,
+      // dragging the view back to dead-behind-the-fly as fast as it was set.
+      if (!this._chaseSmoothed) this._chaseSmoothed = target.clone();
+      this._chaseSmoothed.lerp(target, 0.12);
+      this.orbitAround(new THREE.Vector3(p.x, p.y + 0.4, p.z), this._chaseSmoothed);
     } else if (this.cameraMode === 'eye') {
       this.camera.position.copy(this.eyeCamera.position);
       this.camera.quaternion.copy(this.eyeCamera.quaternion);
     } else if (this.cameraMode === 'top') {
-      this.camera.position.set(p.x, this.size * 1.1, p.z + 0.01);
-      this.camera.lookAt(p.x, 0, p.z);
+      const basePosition = new THREE.Vector3(p.x, this.size * 1.1, p.z + 0.01);
+      this.orbitAround(new THREE.Vector3(p.x, 0, p.z), basePosition);
     }
   }
 

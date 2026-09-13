@@ -59,6 +59,39 @@ export class TrainingLoop {
     this.lastDecision = null;
     this.decisionState = 'IDLE';
     this.episodeState = null;
+    // Evaluation mode: run the learned policy greedily with weights FROZEN,
+    // so "watch it play" shows exactly what was learned rather than a rollout
+    // that keeps quietly re-training itself while you watch. Separate from
+    // `q.trials/wins/losses` (lifetime training stats) so an eval run's
+    // success rate isn't diluted by/mixed into the training history.
+    this.evaluating = false;
+    this.evalStats = null;
+  }
+
+  /** Freeze the readout's weights and switch to greedy action selection. */
+  startEvaluating() {
+    this.evaluating = true;
+    this.evalStats = { trials: 0, wins: 0, losses: 0, pushes: 0 };
+  }
+
+  /** Return to normal epsilon-greedy training with weight updates. */
+  stopEvaluating() {
+    this.evaluating = false;
+    this.evalStats = null;
+  }
+
+  get evalSuccessRate() {
+    return this.evalStats?.trials ? this.evalStats.wins / this.evalStats.trials : 0;
+  }
+
+  _recordOutcome(reward) {
+    this.q.recordOutcome(reward);
+    if (this.evaluating && this.evalStats) {
+      this.evalStats.trials += 1;
+      if (reward > 0) this.evalStats.wins += 1;
+      else if (reward < 0) this.evalStats.losses += 1;
+      else this.evalStats.pushes += 1;
+    }
   }
 
   readFeatures() {
@@ -77,7 +110,7 @@ export class TrainingLoop {
     this.lastDecision = null;
     if (done) {
       this._settleTerminal(reward);
-      this.q.recordOutcome(reward);
+      this._recordOutcome(reward);
       this.decisionState = this.task.describe(state, null) ?? 'RESOLVED (no decision)';
       return false;
     }
@@ -92,18 +125,23 @@ export class TrainingLoop {
     this.settle();
 
     const features = this.readFeatures();
-    const action = this.q.chooseAction(features);
+    // Evaluating: always the readout's best action, never an exploratory one
+    // -- an epsilon-greedy rollout would misrepresent what was actually learned.
+    const action = this.evaluating ? this.q.greedyAction(features) : this.q.chooseAction(features);
     this.decisionState = this.task.describe(state, action);
 
     const { reward, done } = this.task.step(action);
 
-    if (this.lastDecision) {
+    if (this.lastDecision && !this.evaluating) {
       this.q.update(this.lastDecision.features, this.lastDecision.action, 0, features);
     }
 
     if (done) {
-      this.q.update(features, action, reward, null);
-      this.q.recordOutcome(reward);
+      if (!this.evaluating) this.q.update(features, action, reward, null);
+      this._recordOutcome(reward);
+      // The dopamine/aversive pulse fires regardless of evaluating -- it's an
+      // honest reflection of the outcome into the real network, not part of
+      // the readout's training (see this file's header note).
       this._settleTerminal(reward);
       this.lastDecision = null;
     } else {

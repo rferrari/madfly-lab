@@ -52,22 +52,29 @@ export function buildTetheredRig(brainSource) {
   ring.position.y = 0.002;
   group.add(ring);
 
-  // Tethered platform / spherical treadmill under the fly.
+  // Tethered platform / spherical treadmill under the fly. Sized against the
+  // avatar's ROOM-2 scale (MadFlyLab.setRoom shrinks it there specifically,
+  // see TETHERED_AVATAR_SCALE) -- at the free-roaming scale this ball and
+  // the whole avatar body sat at the same y and heavily overlapped each
+  // other (and the scripted leg gestures), reading as one oversized blob
+  // with the legs lost inside it.
+  const BALL_RADIUS = 0.14;
+  const BALL_Y = 0.18; // top at 0.32, just under the (now-smaller) avatar's belly
   const post = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.18, 0.4, 16),
+    new THREE.CylinderGeometry(0.05, 0.075, 0.18, 16),
     new THREE.MeshStandardMaterial({ color: 0x1a1030, roughness: 0.5, metalness: 0.6 }),
   );
-  post.position.set(PLATFORM_POSITION.x, 0.2, PLATFORM_POSITION.z);
+  post.position.set(PLATFORM_POSITION.x, 0.09, PLATFORM_POSITION.z);
   group.add(post);
 
   const ball = new THREE.Mesh(
-    new THREE.SphereGeometry(0.34, 24, 16),
+    new THREE.SphereGeometry(BALL_RADIUS, 24, 16),
     new THREE.MeshStandardMaterial({
       color: 0x241a3a, roughness: 0.25, metalness: 0.7,
       emissive: THEME.violet, emissiveIntensity: 0.2,
     }),
   );
-  ball.position.set(PLATFORM_POSITION.x, 0.42, PLATFORM_POSITION.z);
+  ball.position.set(PLATFORM_POSITION.x, BALL_Y, PLATFORM_POSITION.z);
   group.add(ball);
 
   // A thin tether rod from above -- purely visual, communicates "held in place".
@@ -97,25 +104,38 @@ export function buildTetheredRig(brainSource) {
   orb.object3D.position.copy(ORB_POSITION);
   group.add(orb.object3D);
 
-  // Scripted leg rig, attached under where the avatar will sit.
+  // Scripted leg rig, attached where the (Room-2-scaled) avatar's belly
+  // meets the ball's top -- see BALL_Y/BALL_RADIUS above.
   const legRig = new LegRig();
-  legRig.object3D.position.set(PLATFORM_POSITION.x, 0.5, PLATFORM_POSITION.z);
+  legRig.object3D.position.set(PLATFORM_POSITION.x, BALL_Y + BALL_RADIUS, PLATFORM_POSITION.z);
   group.add(legRig.object3D);
 
   return { group, orb, legRig };
 }
 
+// Exported so scene glue placing its own equipment (e.g. the blackjack dock)
+// can orient a display toward where the viewer actually is, rather than
+// toward the fly -- see examples/blackjack/tethered-scene.js.
+export const TETHERED_BASE_POSITION = new THREE.Vector3(3.2, 2.3, -2.4);
+const TETHERED_LOOK_TARGET = new THREE.Vector3(
+  PLATFORM_POSITION.x, 1.0, (PLATFORM_POSITION.z + DOCK_POSITION.z) / 2,
+);
+
 /**
- * Fixed close-up camera framing for the tethered rig -- called once per frame.
+ * Close-up camera framing for the tethered rig -- called once per frame.
+ * Routes through `arena.orbitAround` (not a direct camera.position.set) so
+ * the player's right-click free-look/zoom works here too, layered on top of
+ * this fixed base framing rather than needing its own separate camera logic.
  *
- * Positioned to the SIDE of the platform-to-dock axis, not behind the dock:
- * an earlier version put the camera further along +z than the dock itself,
- * meaning it looked back at the platform THROUGH the card table's tabletop --
- * the underside of a large flat mesh fills almost the whole frame from there.
- * Sitting off to one side keeps both the tethered fly (and the orb above it)
- * and the dock in view without either occluding the other.
+ * The base position is to the SIDE of the platform-to-dock axis, not behind
+ * the dock: an earlier version put the camera further along +z than the dock
+ * itself, meaning it looked back at the platform THROUGH the card table's
+ * tabletop -- the underside of a large flat mesh fills almost the whole frame
+ * from there. Sitting off to one side keeps both the tethered fly (and the
+ * orb above it) and the dock in view without either occluding the other.
+ *
+ * @param {import('../core/arena.js').Arena} arena
  */
-export function frameTetheredCamera(camera) {
-  camera.position.set(1.9, 1.7, -1.1);
-  camera.lookAt(PLATFORM_POSITION.x, 0.85, (PLATFORM_POSITION.z + DOCK_POSITION.z) / 2);
+export function frameTetheredCamera(arena) {
+  arena.orbitAround(TETHERED_LOOK_TARGET, TETHERED_BASE_POSITION);
 }
