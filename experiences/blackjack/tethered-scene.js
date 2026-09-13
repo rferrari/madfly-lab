@@ -29,6 +29,18 @@ const SPEEDS = [
   { label: 'Fast', ms: 350 },
 ];
 
+// Only paces how often a real, already-settled decision gets taken -- every
+// tick still runs the same fixed TrainingLoop.settle() + TD update regardless
+// of this interval, so Speed changes how fast you watch training happen, not
+// what gets learned or how well.
+//
+// A round cap so training has a definite end instead of running forever --
+// 1,500 episodes matches the sample size `training/blackjack-findings.md`'s
+// offline run used, enough to see whether the readout's success rate has
+// leveled off. Reset Training clears `loop.q.trials` back to 0, so the cap
+// re-applies after a reset.
+const TRAINING_EPISODE_CAP = 1500;
+
 /**
  * A tiny modal listing saved skills (from GET /api/skills), newest first --
  * click one to load it. There's no established picker component elsewhere in
@@ -156,7 +168,10 @@ export function enterBlackjack(lab, opts = {}) {
   // this task injects into.)
   if (opts.initialQ) loop.q = opts.initialQ;
 
-  let running = true;
+  // Starts stopped -- entering the room shouldn't silently start spending
+  // training rounds before anyone's watching. `awaitingNextHand` stays true
+  // until the first "Resume Training"/"Play" click starts the first episode.
+  let running = false;
   let awaitingNextHand = true;
 
   const tickOnce = () => {
@@ -179,14 +194,27 @@ export function enterBlackjack(lab, opts = {}) {
     lab.legRig?.play('right', result.action === 'hit' ? 'vertical' : 'horizontal');
 
     finishAndRedraw(result.action);
-    if (result.done) awaitingNextHand = true;
+    if (result.done) {
+      awaitingNextHand = true;
+      // Training (not eval) has hit the round cap -- stop rather than run
+      // forever, so there's a definite point at which training is "done."
+      if (!loop.evaluating && loop.q.trials >= TRAINING_EPISODE_CAP) {
+        running = false;
+        hud.flash(`Training complete: ${TRAINING_EPISODE_CAP} rounds. Click Play to test it.`);
+      }
+    }
   };
 
   function finishAndRedraw(action) {
+    // No episode has started yet (task.hand is null before the first
+    // Resume/Play click) -- draw the idle placeholder rather than reading
+    // through a hand that doesn't exist yet.
+    const state = task.hand ? task.state() : { playerTotal: 0, dealerUpcard: 0, usableAce: false };
     const q = loop.q.qValues(loop.readFeatures());
     // Same {evaluating, successRate, trials, evalStats} shape both widgets
     // read -- one source of truth for "is this training or playing," so the
-    // two can't quietly disagree.
+    // two can't quietly disagree. `running` lets the HUD show a genuine
+    // IDLE state, distinct from LEARNING, while stopped.
     const meta = {
       trials: loop.q.trials,
       successRate: loop.q.successRate,
@@ -194,9 +222,11 @@ export function enterBlackjack(lab, opts = {}) {
       losses: loop.q.losses,
       evaluating: loop.evaluating,
       evalStats: loop.evalStats,
+      running,
+      cap: TRAINING_EPISODE_CAP,
     };
-    table._render(task.state(), action, loop.decisionState, q);
-    handScreen.render(task.state(), action, loop.decisionState, q, meta);
+    table._render(state, action, loop.decisionState, q);
+    handScreen.render(state, action, loop.decisionState, q, meta);
     hud.sample({
       pam11: lab.brain.readCalibrated('PAM11'),
       ppl1: lab.brain.readCalibrated('PPL1'),
@@ -205,6 +235,11 @@ export function enterBlackjack(lab, opts = {}) {
     hud.setBadge({ ...meta, decisionState: loop.decisionState });
     hud.update();
   }
+
+  // Draw the initial IDLE frame immediately -- otherwise the HUD sits blank
+  // (or on stale defaults) until the first click, same gap the iknow-blackjack
+  // room's Start Game screen was added to avoid.
+  finishAndRedraw(null);
 
   let speedIdx = opts.speedIndex ?? 0; // default 'Slow' -- see SPEEDS
   let interval = setInterval(tickOnce, SPEEDS[speedIdx].ms);
@@ -220,9 +255,23 @@ export function enterBlackjack(lab, opts = {}) {
   // blocking alert()/confirm() (those freeze the whole render loop, since
   // the render/brain loop and this dialog would be fighting over the same
   // single JS thread).
-  hud.addButton('Stop', () => { running = false; });
+  hud.addButton('Stop', () => { running = false; finishAndRedraw(null); });
   hud.addButton('Resume Training', () => { running = true; loop.stopEvaluating(); }, 'secondary');
-  hud.addButton('Play Learned Policy', () => { running = true; loop.startEvaluating(); }, 'secondary');
+  hud.addButton('Play', () => { running = true; loop.startEvaluating(); }, 'secondary');
+  // Vision is on by default for this room (see the note above on
+  // `opts.vision`) -- toggling it off mid-session blinds the fly for real
+  // (no compound-eye/looming input reaches the brain at all), which is the
+  // most direct way to show the task's decisions come from the odor-driven
+  // DN reads, not from anything she's seeing.
+  let eyesCovered = false;
+  const eyesBtn = hud.addButton('Cover Eyes', () => {
+    eyesCovered = !eyesCovered;
+    lab.visionEnabled = !eyesCovered;
+    eyesBtn.textContent = eyesCovered ? 'Uncover Eyes' : 'Cover Eyes';
+    hud.flash(eyesCovered
+      ? 'Eyes covered — decisions now come only from odor-driven DN reads'
+      : 'Eyes uncovered — vision is back on');
+  }, 'secondary');
   // Saved via the dev-server's /api/skills endpoint (vite-plugins/skill-
   // storage.js) into a real file under training/skills/, not clipboard --
   // that only worked as long as you remembered to paste it somewhere before

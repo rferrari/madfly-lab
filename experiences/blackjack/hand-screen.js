@@ -62,19 +62,36 @@ export class HandScreen {
     // so directly rather than assuming the viewer is also watching
     // TrainingHUD's smaller badge text at the same moment.
     const evaluating = !!meta.evaluating;
+    // `running` defaults to true for a caller that never passes it, so this
+    // only differs from the old two-state banner where a scene actually
+    // starts stopped and passes `running: false` (see tethered-scene.js).
+    const running = meta.running !== false;
     const bannerH = 26;
-    ctx.fillStyle = evaluating ? 'rgba(0, 229, 255, 0.16)' : 'rgba(154, 92, 255, 0.18)';
-    ctx.fillRect(2, 2, w - 4, bannerH);
-    ctx.fillStyle = evaluating ? CSS.cyan : CSS.violet;
-    ctx.font = `700 13px ${CSS.font}`;
-    ctx.textAlign = 'center';
-    if (evaluating) {
+    if (!running) {
+      ctx.fillStyle = 'rgba(232, 224, 245, 0.08)';
+      ctx.fillRect(2, 2, w - 4, bannerH);
+      ctx.fillStyle = CSS.dim;
+      ctx.font = `700 13px ${CSS.font}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('○ IDLE', w / 2, bannerH / 2 + 5);
+    } else if (evaluating) {
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.16)';
+      ctx.fillRect(2, 2, w - 4, bannerH);
+      ctx.fillStyle = CSS.cyan;
+      ctx.font = `700 13px ${CSS.font}`;
+      ctx.textAlign = 'center';
       const n = meta.evalStats?.trials ?? 0;
       const pct = n ? ((meta.evalStats.wins / n) * 100).toFixed(1) : '0.0';
       ctx.fillText(`▶ PLAYING · ${pct}% (${n} hands)`, w / 2, bannerH / 2 + 5);
     } else {
+      ctx.fillStyle = 'rgba(154, 92, 255, 0.18)';
+      ctx.fillRect(2, 2, w - 4, bannerH);
+      ctx.fillStyle = CSS.violet;
+      ctx.font = `700 13px ${CSS.font}`;
+      ctx.textAlign = 'center';
       const pct = ((meta.successRate ?? 0) * 100).toFixed(1);
-      ctx.fillText(`● LEARNING · ${pct}% (${meta.trials ?? 0} hands)`, w / 2, bannerH / 2 + 5);
+      const capText = meta.cap ? ` / ${meta.cap}` : '';
+      ctx.fillText(`● LEARNING · ${pct}% (${meta.trials ?? 0}${capText} hands)`, w / 2, bannerH / 2 + 5);
     }
 
     ctx.fillStyle = CSS.cyan;

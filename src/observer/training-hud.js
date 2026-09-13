@@ -135,8 +135,8 @@ export class TrainingHUD {
     this.head = (this.head + 1) % HISTORY;
   }
 
-  setBadge({ trials, successRate, decisionState, wins, losses, evaluating, evalStats }) {
-    this.badge = { trials, successRate, decisionState, wins, losses, evaluating, evalStats };
+  setBadge({ trials, successRate, decisionState, wins, losses, evaluating, evalStats, running, cap }) {
+    this.badge = { trials, successRate, decisionState, wins, losses, evaluating, evalStats, running, cap };
   }
 
   update() {
@@ -190,12 +190,25 @@ export class TrainingHUD {
 
     if (this.stateEl) {
       const evaluating = !!this.badge.evaluating;
-      this.stateEl.textContent = evaluating ? '■ FROZEN — PLAYING LEARNED POLICY' : '● LEARNING';
-      this.stateEl.style.background = evaluating ? 'rgba(0, 229, 255, 0.16)' : 'rgba(154, 92, 255, 0.22)';
-      this.stateEl.style.color = evaluating ? CSS.cyan : CSS.violet;
+      // `running` defaults to true for any caller that doesn't pass it
+      // (back-compat), so a room without a Stop/Start gate keeps showing
+      // LEARNING/PLAYING exactly as before -- IDLE only appears where a
+      // scene actually starts stopped and passes `running: false`.
+      const running = this.badge.running !== false;
+      let text; let bg; let color; let pulse;
+      if (!running) {
+        text = '○ IDLE'; bg = 'rgba(232, 224, 245, 0.08)'; color = CSS.dim; pulse = false;
+      } else if (evaluating) {
+        text = '▶ PLAYING'; bg = 'rgba(0, 229, 255, 0.16)'; color = CSS.cyan; pulse = false;
+      } else {
+        text = '● LEARNING'; bg = 'rgba(154, 92, 255, 0.22)'; color = CSS.violet; pulse = true;
+      }
+      this.stateEl.textContent = text;
+      this.stateEl.style.background = bg;
+      this.stateEl.style.color = color;
       // Only the LEARNING state pulses -- it's the one where something is
-      // actively changing every tick; frozen is, honestly, frozen.
-      this.stateEl.style.animation = evaluating ? 'none' : 'training-hud-pulse 1.6s ease-in-out infinite';
+      // actively changing every tick; frozen/idle are, honestly, not.
+      this.stateEl.style.animation = pulse ? 'training-hud-pulse 1.6s ease-in-out infinite' : 'none';
     }
 
     if (this.badgeEl) {
@@ -203,11 +216,12 @@ export class TrainingHUD {
       const lines = [
         `<span style="color:${CSS.dim}">success</span> ${(b.successRate * 100).toFixed(1)}%`
           + (b.wins != null ? ` <span style="color:${CSS.dim}">(${b.wins}W/${b.losses ?? 0}L)</span>` : ''),
-        `<span style="color:${CSS.dim}">trials</span> ${b.trials}`,
+        `<span style="color:${CSS.dim}">trials</span> ${b.trials}`
+          + (b.cap ? ` <span style="color:${CSS.dim}">/ ${b.cap}</span>` : ''),
       ];
       if (b.evaluating) {
         const evalPct = (b.evalStats?.trials ? (b.evalStats.wins / b.evalStats.trials) * 100 : 0).toFixed(1);
-        lines.push(`<span style="color:${CSS.cyan}">▶ PLAYING LEARNED POLICY</span> — `
+        lines.push(`<span style="color:${CSS.cyan}">▶ PLAYING</span> — `
           + `${evalPct}% <span style="color:${CSS.dim}">(${b.evalStats?.trials ?? 0} hands, weights frozen)</span>`);
       }
       // Its own non-wrapping, height-fixed line: `decisionState`'s text length
