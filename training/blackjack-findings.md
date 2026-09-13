@@ -9,14 +9,14 @@ Raw run data: `blackjack-run-2026-09-12.json` (same folder).
 - Real pack: `courtship.mflpack` (7,337 real neurons, 430,441 real synaptic
   edges, male-cns:v1.0), driven headlessly through the exact production
   `TrainingLoop`/`QReadout`/`BlackjackTask` code (`src/training/`,
-  `examples/blackjack/`) — no browser, no scene, just the real connectome
+  `experiences/blackjack/`) — no browser, no scene, just the real connectome
   dynamics and the real game rules.
 - Feature channels (the Q-readout's only inputs): `DNa01_L`, `DNa01_R`,
   `DNp03`, `DNp13` — all real, calibrated DN reads.
 - Reward pulses: `PAM11` on a win, `PPL1` on a loss (the framework's default,
   `TrainingLoop`'s `rewardChannels`).
 - Hyperparameters: `alpha=0.05, gamma=0.95, epsilon=0.15` (the same defaults
-  `examples/blackjack/tethered-scene.js` ships with).
+  `experiences/blackjack/tethered-scene.js` ships with).
 - 1,500 episodes/seed, 2 seeds (1, 2). Short run — enough to see whether the
   policy converges and to what, not a rigorous statistical sweep.
 

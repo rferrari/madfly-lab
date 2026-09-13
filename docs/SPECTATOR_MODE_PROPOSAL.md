@@ -51,13 +51,13 @@ Two things worth stating plainly, since they weren't obvious going in:
   `lock()`/`unlock()`. This is independent of `running` — a locked lab keeps
   simulating and rendering; only user-driven input stops reaching it.
 - Every existing input-binding site gets a one-line guard at the top:
-  - `examples/hello-lab.js`'s big `keydown` handler (camera, reset, mint,
+  - `experiences/hello-lab.js`'s big `keydown` handler (camera, reset, mint,
     poke, lights, fan, brightness, circuit, zoom, genotype)
   - `src/core/lab.js`'s `_bindPointer()` (pointerdown/up → poke) and
     `_bindRecordingKeys()` (shift+R/P/V/J/C)
-  - `examples/room-menu.js`'s `keydown` handler (M/Escape) and its shared
+  - `experiences/room-menu.js`'s `keydown` handler (M/Escape) and its shared
     `mkBtn` `onclick` (all 5 menu buttons route through one place)
-  - `examples/optogenetics/optogenetics-palette.js`'s pointer handlers and
+  - `experiences/optogenetics/optogenetics-palette.js`'s pointer handlers and
     tool-select/side-toggle button clicks
   - Blackjack needs nothing — it's fully autonomous, no input bindings at all.
 - `window.lab` stays globally reachable from devtools regardless — `locked`
@@ -68,7 +68,7 @@ Two things worth stating plainly, since they weren't obvious going in:
   `room-menu.js` gains `endExperience()` — `leaveRoom2Tasks(); lab.stop();
   show();` — which tears down whatever Room 2 task is active and returns to
   the exact "paused, pick a room" state the app already boots into.
-- **New UI**: `examples/lock-control.js`, a small persistent widget
+- **New UI**: `experiences/lock-control.js`, a small persistent widget
   (bottom-right, above the room-menu's z-index so it stays clickable while
   the menu is open). Idle state: `[🔒 Lock & Share]`. Once sharing: a status
   line (`● LIVE · N spectator(s)`), the generated link + copy button,
@@ -85,15 +85,15 @@ New files:
   relay process running the same logic on its own port. That's a deliberate,
   labeled follow-up for whenever this actually gets hosted somewhere, not
   something to build now.
-- `examples/broadcast/signal-client.js` — a tiny shared helper: open the
+- `experiences/broadcast/signal-client.js` — a tiny shared helper: open the
   relay socket, send/receive op-tagged JSON messages.
-- `examples/broadcast/owner-broadcast.js` — the owner side:
+- `experiences/broadcast/owner-broadcast.js` — the owner side:
   `getDisplayMedia({preferCurrentTab:true})`, one `RTCPeerConnection` per
   joining spectator (all fed from the same capture stream), STUN-only NAT
   traversal (`stun:stun.l.google.com:19302`, no TURN server — documented
   limitation, works for most home networks, will fail behind some
   restrictive/symmetric NATs).
-- `examples/broadcast/spectator-page.js` — the spectator side: a full-viewport
+- `experiences/broadcast/spectator-page.js` — the spectator side: a full-viewport
   `<video>` element and one `RTCPeerConnection`. Critically, this module never
   imports `MadFlyLab` or touches `src/index.js` — a spectator tab never
   constructs a lab at all, which is the strongest possible "zero control"

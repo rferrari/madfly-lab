@@ -1,7 +1,7 @@
 /**
  * A small transient toast for the optogenetics palette -- same fixed-div /
  * fade pattern already used in this codebase (src/core/lab.js's
- * `_showRecordingStatus`, examples/hello-lab.js's `log()`), duplicated rather
+ * `_showRecordingStatus`, experiences/hello-lab.js's `log()`), duplicated rather
  * than reused because both of those are private to their own modules. Own
  * `@keyframes` id so its pulse animation can't collide with
  * `recording-pulse-style` (src/core/lab.js).

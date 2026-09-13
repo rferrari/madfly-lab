@@ -319,10 +319,10 @@ platform/orb/leg-rig scene) and `src/training/{q-learning,training-loop}.js`
 (a generic, task-agnostic sense→settle→read→decide→act→learn loop and its
 linear TD-learning readout) are framework code, exported from `mad-fly-lab`
 like anything else. The actual task -- what's being trained on -- is not:
-`examples/blackjack/` plays Blackjack (matching Gymnasium's `Blackjack-v1`
+`experiences/blackjack/` plays Blackjack (matching Gymnasium's `Blackjack-v1`
 spec exactly: infinite deck, Hit/Stand only, dealer stands on 17), inspired by
 NeuroMechFly's own blackjack demo. A different tethered task (a maze, a colour
-choice) would live in its own `examples/` folder, plugging into the same
+choice) would live in its own `experiences/` folder, plugging into the same
 `TrainingLoop`.
 
 **The architecture, stated plainly, because it's easy to overclaim here.** The
@@ -358,7 +358,7 @@ src/
   stations/  slot-machine.js · food-bowl.js · hazard-fan.js · cube.js
   rooms/     tethered-rig.js               (Room 2's scene: platform, orb, dock)
   training/  q-learning.js · training-loop.js   (generic, task-agnostic)
-examples/
+experiences/
   hello-lab.js · room-menu.js
   blackjack/   blackjack.js · blackjack-sensory.js · blackjack-task.js ·
                card-table.js · tethered-scene.js

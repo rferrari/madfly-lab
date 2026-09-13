@@ -1,12 +1,12 @@
 /**
- * Pure game-logic tests for examples/blackjack/blackjack.js -- no brain, no
+ * Pure game-logic tests for experiences/blackjack/blackjack.js -- no brain, no
  * THREE.js, verified against known Blackjack-v1 statistics rather than just
  * internal self-consistency.
  */
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawCard, handValue, isBust, isNatural, playDealer, resolve, Hand } from '../examples/blackjack/blackjack.js';
+import { drawCard, handValue, isBust, isNatural, playDealer, resolve, Hand } from '../experiences/blackjack/blackjack.js';
 
 function seeded(s) {
   let x = s >>> 0 || 1;

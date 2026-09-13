@@ -238,12 +238,12 @@ madfly-lab/
 │   ├── brain/             # Runtime engines (Mode A/B)
 │   ├── stations/          # Interactive equipment (Screen, Fan, etc.)
 │   └── observer/          # HUD, diagnostics, screen recorder
-├── examples/              # Complete scenes (hello-lab, blackjack, etc.)
+├── experiences/           # Complete scenes (hello-lab, blackjack, etc.)
 ├── docs/                  # Documentation
 ├── packs/                 # Pre-built circuit packs (static assets)
 ├── python/                # Mode A server, circuit builder, connectome access
 │   ├── scripts/           # build_pack.py, etc.
 │   └── src/madfly_lab/    # Main Python module
 ├── tests/                 # Test suite
-└── training/              # Tethered-rig training examples
+└── training/              # Tethered-rig training experiences
 ```

@@ -12,7 +12,7 @@ connectome. Read this before changing anything.
 
 | Layer | Path | May an agent edit it? |
 |---|---|---|
-| Scenes & experiences | `scenes/`, `examples/` | **Yes — this is the work.** |
+| Scenes & experiences | `scenes/`, `experiences/` | **Yes — this is the work.** |
 | Stations | `src/stations/` | Yes, to add new station types |
 | Sensor math | `src/avatar/retina.js`, `motion.js` | Only when adding a new *hardware sensor* |
 | WebGL pipeline | `src/core/arena.js`, `src/observer/` | **No** |
@@ -285,8 +285,8 @@ as the other two: don't fake it by wiring a leg to a motor neuron directly.
 takes a plain `{start, step, state, encodeState, describe}` object (see the
 file's own docstring) and knows nothing about cards, mazes, or anything else.
 If you add a new tethered task, its game rules and its stimulus→real-ORN
-encoding belong in `examples/<task>/`, not in `src/training/`, the same way
-`examples/blackjack/` is entirely blackjack and `src/training/q-learning.js`
+encoding belong in `experiences/<task>/`, not in `src/training/`, the same way
+`experiences/blackjack/` is entirely blackjack and `src/training/q-learning.js`
 has never heard of a card. A generalization that leaks task-specific logic
 into `TrainingLoop` defeats the point of having it be a framework primitive.
 

@@ -8,7 +8,7 @@
  * tools actually does.
  *
  * Call `mountOptogenetics(lab)` after (or instead of) `lab.setRoom('tethered-
- * rig')` -- mirrors examples/blackjack/tethered-scene.js's `enterBlackjack`
+ * rig')` -- mirrors experiences/blackjack/tethered-scene.js's `enterBlackjack`
  * lifecycle shape exactly. Call the returned `dispose()` to leave cleanly.
  */
 
@@ -45,7 +45,7 @@ export function mountOptogenetics(lab, opts = {}) {
     // Bottom-left, NOT top-right: the observer HUD (src/observer/lab-observer.js)
     // is a fixed `top:0; right:0` column spanning the whole right edge, so
     // top-right is already claimed. Bottom-left is where TrainingHUD lives too
-    // (examples/blackjack/), but the two Room 2 tasks are mounted mutually
+    // (experiences/blackjack/), but the two Room 2 tasks are mounted mutually
     // exclusively (see room-menu.js), so there is never a simultaneous clash.
     position: 'fixed', bottom: '16px', left: '16px', zIndex: '18',
     display: 'flex', flexDirection: 'column', gap: '8px', width: '198px',

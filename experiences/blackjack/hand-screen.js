@@ -1,7 +1,7 @@
 /**
  * HandScreen -- a 2D DOM "monitor" for the blackjack task, stacked directly
  * above the TrainingHUD panel. Shows exactly the same content as the in-world
- * screen (examples/blackjack/card-table.js): current hand, the fly's action,
+ * screen (experiences/blackjack/card-table.js): current hand, the fly's action,
  * and the live Q-values, plus a mode/accuracy banner (see `render`'s `meta`
  * param) -- added because the training-vs-playing distinction was previously
  * only in the smaller TrainingHUD panel below, easy to lose track of while

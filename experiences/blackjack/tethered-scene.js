@@ -32,7 +32,7 @@ const SPEEDS = [
 /**
  * A tiny modal listing saved skills (from GET /api/skills), newest first --
  * click one to load it. There's no established picker component elsewhere in
- * this codebase to reuse, so this mirrors examples/room-menu.js's own
+ * this codebase to reuse, so this mirrors experiences/room-menu.js's own
  * plain-overlay style (same z-index-above-everything convention) rather than
  * inventing a different look.
  */

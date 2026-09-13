@@ -15,8 +15,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
-    "pack": "cd python && .venv/bin/python scripts/build_pack.py --all --cache-dir ../../fly_simulation/.cache --out-dir ../packs",
-    "brain:full": "cd python && .venv/bin/python -m madfly_lab.server --cache-dir ../../fly_simulation/.cache"
+    "pack": "cd python && .venv/bin/python scripts/build_pack.py --all --cache-dir ./.cache --out-dir ../packs",
+    "brain:full": "cd python && .venv/bin/python -m madfly_lab.server --cache-dir ./.cache"
   },
   "peerDependencies": {
     "three": ">=0.160.0"

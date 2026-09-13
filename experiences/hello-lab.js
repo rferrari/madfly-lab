@@ -424,13 +424,16 @@ function log(msg) {
 
 window.lab = lab;
 
+// Define enterMadflyLab so entering from the landing page lands directly in Room 1 (Free-Roaming Arena).
+window.enterMadflyLab = () => {
+  buildRoom1();
+  lab.resume();
+};
+
 // Room menu -- press M to reopen later. Kept as a separate module since
 // choosing which room/task to enter is scene glue, not framework code.
-// Shown immediately (not waiting for M) as the mandatory first choice: the
-// lab is paused (see `lab.stop()` above) until a room is picked here.
 import('./room-menu.js').then(({ mountRoomMenu }) => {
-  const menu = mountRoomMenu(lab, { onLog: log, onEnterFreeRoaming: buildRoom1 });
-  menu.show();
+  mountRoomMenu(lab, { onLog: log, onEnterFreeRoaming: buildRoom1 });
 });
 
 console.info('MadFly Lab ready. 1-4 camera · N new fly · R reset · P poke (or click the fly) · '

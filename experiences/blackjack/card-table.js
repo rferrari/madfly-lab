@@ -89,7 +89,7 @@ export class CardTable extends Station {
     // A PlaneGeometry's default normal faces local +Z -- deliberately left
     // alone here (no rotation.y) so this whole group's local +Z is "the
     // direction the screen faces." Whoever places this station (see
-    // examples/blackjack/tethered-scene.js) rotates the GROUP to aim that at
+    // experiences/blackjack/tethered-scene.js) rotates the GROUP to aim that at
     // whichever real-world direction it wants the screen readable from (the
     // viewer, not the fly -- see that file for why), rather than this file
     // hardcoding an assumption about where the camera/fly will be.
