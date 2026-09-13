@@ -29,7 +29,17 @@ const lab = new MadFlyLab({
   mode: params.get('mode') ?? 'auto',
   circuit: params.get('circuit') ?? 'courtship',
   camera: 'chase',
-  arenaSize: 17,
+  // MUST stay comfortably bigger than the station ring below (arrangeInRing(16)
+  // -> bounds must clear 16 with margin on every approach). It used to be 17
+  // (bounds 15), 1 unit SMALLER than the ring radius -- so the four
+  // axis-aligned stations (Screen, Sugar Cube, Hazard Fan, Workstation) sat
+  // just past the wall, and the fly's wall-bounce (position clamp + turn back
+  // toward centre + speed cut, see LabAvatar.act) fired right as it arrived,
+  // aborting the approach almost every time. Measured live: the fly's scent
+  // signal (the only thing that steers it toward a station) stayed at a flat
+  // 0 until it happened to wander within scentRadius, and it rarely got that
+  // close before being walled off first.
+  arenaSize: 22,
   avatarOptions: { seed: params.get('seed') ?? undefined },
 });
 
@@ -63,18 +73,22 @@ function buildRoom1() {
   // made the fly look like it liked one food and avoided the other -- it was
   // simply smelling one from further away and seeing it better.
   lab.addStation(new Station.FoodBowl({
-    scentRadius: 8, scentType: 'ORN_VA6',
+    scentRadius: 12, scentType: 'ORN_VA6',
     onKick: () => log('forage: reached the VA6 bowl'),
   }));
 
   // A sugar cube and a rotten one: matte, unlit, identical but for the odour, so
   // only the smell can decide anything. ORN_DM1 is a real attractive glomerulus,
   // ORN_V the real CO2 one a live fly avoids.
+  // scentRadius raised 8 -> 12 (matching Mate's own default) -- at 8, in a
+  // now-bigger room with an unchanged 16-radius station ring, a wandering fly
+  // measurably never got close enough to smell any of these until it was
+  // nearly on top of the ring; see the arenaSize comment above.
   lab.addStation(new Station.SugarCube({
-    scentRadius: 8,
+    scentRadius: 12,
     onTaste: (on) => on && log('sugar: tasting → DNp06'),
   }));
-  lab.addStation(new Station.PoopCube({ scentRadius: 8 }));
+  lab.addStation(new Station.PoopCube({ scentRadius: 12 }));
 
   // 4. Hazard Fan -- looming threat, rotor in a vertical plane facing the arena
   //    so the blades genuinely expand across the fly's visual field.
