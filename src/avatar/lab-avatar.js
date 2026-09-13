@@ -103,6 +103,44 @@ export class LabAvatar {
     speedGain = 4.0,
     maxSpeed = 6.0,
     escapeImpulse = 5.0,
+
+    // ---- flight -----------------------------------------------------------
+    //
+    // WHAT IS REAL HERE AND WHAT IS NOT. The TAKEOFF is earned: it fires off
+    // DNp01, the Giant Fiber, which in this dataset draws 11,225 of its 36,735
+    // units of incoming synaptic weight (30.6%) directly from LC4/LPLC1/LPLC2
+    // -- the very cells the looming detector drives. Something rushing at her
+    // really does reach the real escape command neuron, and that is what
+    // throws her into the air.
+    //
+    // Everything after the launch is ENGINEERED AT THE BODY, and deliberately
+    // so, for a measured reason. The real flight-power neuron is DNg02 (29
+    // cells here) and the real flight-steering one is DNa02, and BOTH take
+    // 0.0% of their input from any population this sim can drive: traced in
+    // the full male-cns:v1.0 export, DNg02 gets 0 of 35,213 and DNa02 0 of
+    // 48,125 directly from LC4/LPLC. Their real drive comes from central-brain
+    // circuitry (PS/CL/IB/LAL/VES/GNG) that nothing here stimulates. At two
+    // hops DNg02 reaches only 2,227 bottleneck weight from vision against
+    // DNp01's 21,616 -- about ten times weaker. So a lift signal read out of
+    // this graph would sit flat no matter what she saw or smelled, and
+    // pretending otherwise would be inventing a pathway the data does not
+    // show. Same standard as spontaneousSpeed and the klinokinesis below.
+    //
+    // (DNg13, which general literature might suggest for this role, gets 0 of
+    // 12,533 -- see the note in python/src/madfly_lab/connectome.py, which
+    // records this project rejecting it once already.)
+    /** Upward launch velocity of a Giant Fiber takeoff, u/s. REAL trigger. */
+    takeoffImpulse = 3.4,
+    /** Height she settles at while airborne. Engineered. */
+    cruiseAltitude = 2.2,
+    /** Downward acceleration once the engineered flight motor stops. */
+    gravity = 9.0,
+    /** How long the engineered wing motor runs after a takeoff, seconds. */
+    flightSeconds = 2.6,
+    /** Ceiling, so she cannot leave the room upward. */
+    ceiling = 6.0,
+    /** Resting height of the body above the floor. */
+    groundY = 0.4,
     /** Calibrated DNp06 above which the fly stops to feed. */
     /** Rise in DNp06 above its resting level that counts as "this is food". */
     feedThreshold = 0.12,
@@ -164,6 +202,17 @@ export class LabAvatar {
     this.speedGain = speedGain;
     this.maxSpeed = maxSpeed;
     this.escapeImpulse = escapeImpulse;
+    this.takeoffImpulse = takeoffImpulse;
+    this.cruiseAltitude = cruiseAltitude;
+    this.gravity = gravity;
+    this.flightSeconds = flightSeconds;
+    this.ceiling = ceiling;
+    this.groundY = groundY;
+    /** Airborne? See act(). */
+    this.flying = false;
+    /** Seconds of engineered wing motor left; 0 means she is falling. */
+    this.flightDrive = 0;
+    this.verticalSpeed = 0;
     this.feedThreshold = feedThreshold;
     this.feeding = false;
     this.spontaneousSpeed = spontaneousSpeed;
@@ -248,6 +297,24 @@ export class LabAvatar {
       eye.position.set((side === 'L' ? 1 : -1) * 0.2, 0.1, 0.42);
       group.add(eye);
       return eye;
+    });
+
+    // Wings. Hidden on the ground -- a walking fly folds them and, more to the
+    // point, a box that climbs into the air with nothing moving reads as a bug
+    // rather than as flight.
+    this.wingMeshes = [-1, 1].map((side) => {
+      const wing = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.62, 0.26),
+        new THREE.MeshBasicMaterial({
+          color: id.accent, transparent: true, opacity: 0.34,
+          side: THREE.DoubleSide, depthWrite: false,
+        }),
+      );
+      wing.position.set(side * 0.34, 0.16, -0.06);
+      wing.rotation.x = -Math.PI / 2;
+      wing.visible = false;
+      group.add(wing);
+      return wing;
     });
 
     this.fin = new THREE.Mesh(
@@ -455,9 +522,19 @@ export class LabAvatar {
     // WORLD-MOVEMENT consequences of them are suppressed.
     if (this.tethered) {
       this.speed = 0;
+      this.verticalSpeed = 0;
+      this.flying = false;
+      this.flightDrive = 0;
       this.velocity.set(0, 0, 0);
     } else if (escape > 0.35 && time > this.escapeUntil) {
       this.escapeUntil = time + 0.6;
+      // A Giant Fiber escape is a TAKEOFF, not a scurry. DNp01 firing is the
+      // real trigger (see the flight constants for the connectivity behind
+      // that claim); the launch itself throws her off the floor and hands
+      // control to the engineered wing motor below for `flightSeconds`.
+      this.flying = true;
+      this.flightDrive = this.flightSeconds;
+      this.verticalSpeed = this.takeoffImpulse;
       // Escape is AWAY from whichever side the loom came from. Increasing yaw
       // turns LEFT -- forward is (sin yaw, cos yaw) and right is
       // (-cos yaw, sin yaw), so d(forward)/d(yaw) points along -right (the
@@ -502,8 +579,51 @@ export class LabAvatar {
 
     if (!this.tethered) {
       this.speed = Math.min(this.speed, this.maxSpeed);
-      this.velocity.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(this.speed);
-      this.position.addScaledVector(this.velocity, dt);
+
+      // ---- vertical ------------------------------------------------------
+      // ENGINEERED, every line of it. Only the takeoff above comes from a real
+      // neuron; nothing in this graph can tell her how hard to beat her wings,
+      // because the cells that would (DNg02, DNa02) take 0% of their input
+      // from anything this sim drives. See the flight constants.
+      if (this.flying) {
+        this.flightDrive = Math.max(0, this.flightDrive - dt);
+        if (this.flightDrive > 0) {
+          // Wings working: hold a cruise altitude.
+          const err = this.cruiseAltitude + this.groundY - this.position.y;
+          const wanted = Math.max(-2.5, Math.min(3.0, err * 2.4));
+          this.verticalSpeed += (wanted - this.verticalSpeed) * Math.min(1, dt * 5);
+        } else {
+          // Wings stopped: she is a falling object.
+          this.verticalSpeed -= this.gravity * dt;
+        }
+        this.position.y += this.verticalSpeed * dt;
+
+        if (this.position.y >= this.ceiling) {
+          this.position.y = this.ceiling;
+          this.verticalSpeed = Math.min(0, this.verticalSpeed);
+        }
+        if (this.position.y <= this.groundY) {
+          // Touchdown. Landing is a real tactile event, same cells as a bump.
+          this.position.y = this.groundY;
+          this.flying = false;
+          this.flightDrive = 0;
+          this.speed *= 0.5;
+          if (this.verticalSpeed < -2) this.touch(Math.min(1, -this.verticalSpeed / 6));
+          this.verticalSpeed = 0;
+          this.onLand?.(this);
+        }
+      } else if (this.position.y !== this.groundY) {
+        this.position.y = this.groundY;
+        this.verticalSpeed = 0;
+      }
+
+      this.velocity.set(
+        Math.sin(this.yaw) * this.speed,
+        this.flying ? this.verticalSpeed : 0,
+        Math.cos(this.yaw) * this.speed,
+      );
+      this.position.x += this.velocity.x * dt;
+      this.position.z += this.velocity.z * dt;
 
       // Arena walls. Hitting one is a real tactile event -- same mechanosensory
       // cells as bumping a station -- and it turns the fly back INWARD.
@@ -531,6 +651,17 @@ export class LabAvatar {
       this.object3D.rotation.y = this.yaw;
       // A small roll into turns -- cosmetic, but it makes steering legible.
       this.object3D.rotation.z = -steer * 0.5;
+      // Nose up when climbing, down when dropping. Also cosmetic, and the
+      // cheapest way to make altitude readable from the chase camera.
+      this.object3D.rotation.x = this.flying
+        ? Math.max(-0.5, Math.min(0.5, -this.verticalSpeed * 0.14)) : 0;
+      if (this.wingMeshes) {
+        const beat = this.flying ? Math.sin(time * 46) * 0.9 : 0;
+        for (const [i, wing] of this.wingMeshes.entries()) {
+          wing.visible = this.flying;
+          if (this.flying) wing.rotation.y = (i === 0 ? 1 : -1) * beat;
+        }
+      }
       if (this.fin) this.fin.material.emissiveIntensity = 0.4 + Math.abs(forward) * 2;
       if (this.bodyMesh) {
         this.bodyMesh.material.emissiveIntensity =
@@ -581,6 +712,11 @@ export class LabAvatar {
     this.position.set(...position);
     this.yaw = yaw;
     this.speed = 0;
+    this.flying = false;
+    this.flightDrive = 0;
+    this.verticalSpeed = 0;
+    if (this.wingMeshes) for (const w of this.wingMeshes) w.visible = false;
+    if (this.object3D) this.object3D.rotation.x = 0;
     this.velocity.set(0, 0, 0);
     if (this.eyes) for (const side of ['L', 'R']) this.eyes[side].looming.reset();
     this.touchDrive = 0;

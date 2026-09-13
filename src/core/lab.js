@@ -36,6 +36,10 @@ import { buildTetheredRig, frameTetheredCamera } from '../rooms/tethered-rig.js'
 
 const MAX_CATCHUP_STEPS = 4;
 
+/** Height above her resting Y at which she clears every station. See
+ *  _resolveCollisions. */
+const FLYOVER_CLEARANCE = 1.8;
+
 /** See setRoom()'s 'tethered-rig' branch. */
 const TETHERED_AVATAR_SCALE = 0.55;
 
@@ -415,6 +419,14 @@ export class MadFlyLab {
    */
   _resolveCollisions() {
     const a = this.avatar;
+    // Airborne and above the furniture: nothing to bump into. A 2.5D rule
+    // rather than real 3D volumes, and deliberately -- every station in the
+    // room is short (the tallest thing is the workstation panel, topping out
+    // around 1.5), so one clearance height answers the question that Box3 or
+    // per-station raycasting would answer at much greater cost. Below this she
+    // still collides normally, which is what stops her flying THROUGH a screen
+    // at head height.
+    if (a.flying && a.position.y - a.groundY > FLYOVER_CLEARANCE) return;
     for (const station of this.stations) {
       if (!station.enabled || !station.collisionRadius) continue;
       const dx = a.position.x - station.position.x;

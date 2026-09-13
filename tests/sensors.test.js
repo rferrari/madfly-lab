@@ -421,6 +421,78 @@ describe('switching a station off', () => {
   });
 });
 
+describe('flight', () => {
+  const ground = { setInput() {}, injectCurrent() {}, readSteering: () => 0,
+    readCalibrated: () => 0, readPhasic: () => 0, runtime: null };
+  /** A brain whose Giant Fiber is firing -- the real takeoff trigger. */
+  const alarmed = { ...ground, readCalibrated: (c) => (c === 'DNp01' ? 1 : 0) };
+
+  function run(fly, brain, seconds, t0 = 1) {
+    const dt = 1 / 60;
+    const track = [];
+    for (let i = 0; i < Math.round(seconds / dt); i++) {
+      fly.act(brain, dt, t0 + i * dt);
+      track.push({ y: fly.position.y, flying: fly.flying });
+    }
+    return track;
+  }
+
+  test('a Giant Fiber escape launches her off the floor', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    assert.equal(fly.flying, false);
+    fly.act(alarmed, 1 / 60, 1);
+    assert.ok(fly.flying, 'DNp01 firing should take her off');
+    assert.ok(fly.verticalSpeed > 0, 'takeoff should be upward');
+  });
+
+  test('she climbs to a cruise altitude and holds it', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    fly.act(alarmed, 1 / 60, 1);
+    const track = run(fly, ground, 1.6);
+    const peak = Math.max(...track.map((s) => s.y));
+    assert.ok(peak > fly.groundY + 1.5, `should get airborne, peaked at ${peak.toFixed(2)}`);
+    assert.ok(peak <= fly.ceiling, 'must not leave through the roof');
+    const settled = track[track.length - 1].y;
+    assert.ok(Math.abs(settled - (fly.groundY + fly.cruiseAltitude)) < 0.6,
+      `should hold cruise altitude, sat at ${settled.toFixed(2)}`);
+  });
+
+  test('the wings stop and she comes down and lands', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    fly.act(alarmed, 1 / 60, 1);
+    // well past flightSeconds, with a calm brain so nothing re-triggers
+    const track = run(fly, ground, 8);
+    assert.equal(fly.flying, false, 'should be back on the ground');
+    assert.equal(fly.position.y, fly.groundY, 'should land at resting height');
+    assert.ok(track.some((s) => s.flying), 'should actually have flown first');
+  });
+
+  test('a tethered fly cannot take off', () => {
+    // Room 2 holds her in place; an escape must not launch her off the rig.
+    const fly = new LabAvatar({ position: [0, 0.42, 0], vision: false });
+    fly.tethered = true;
+    run(fly, alarmed, 1);
+    assert.equal(fly.flying, false);
+    assert.equal(fly.verticalSpeed, 0);
+  });
+
+  test('reset puts her back on the ground', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    fly.act(alarmed, 1 / 60, 1);
+    run(fly, ground, 0.5);
+    assert.ok(fly.flying);
+    fly.reset();
+    assert.equal(fly.flying, false);
+    assert.equal(fly.verticalSpeed, 0);
+  });
+
+  test('walking never changes her altitude', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    run(fly, ground, 3);
+    assert.equal(fly.position.y, 0.4, 'a walking fly must stay on the floor');
+  });
+});
+
 describe('Workstation', () => {
   test('the fly walking over the keyboard types', () => {
     const ws = new Workstation({ text: '' });
