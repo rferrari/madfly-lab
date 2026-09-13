@@ -20,6 +20,22 @@ import {
 
 let genotypeIndex = 0;
 
+/**
+ * Arena geometry. These three numbers are ONE decision, not three:
+ *
+ *   arenaSize 17  -> the wall sits at arenaSize - 2 = 15
+ *   RING_RADIUS 11   leaves a 4-unit margin to approach any station from
+ *   SCENT_RADIUS 8   puts neighbouring plumes (1.414 * 11 = 15.6 apart) just
+ *                    touching, and reaches to within 3 of the arena centre
+ *
+ * Both failure modes have already been hit once each. Ring outside the wall
+ * (16 against a wall at 15) meant the wall-bounce aborted every approach.
+ * Plumes much wider than their spacing blend four choosable sources into one
+ * smear, which is the thing the interleaved `order` below exists to prevent.
+ */
+const RING_RADIUS = 11;
+const SCENT_RADIUS = 8;
+
 const params = new URLSearchParams(location.search);
 
 const lab = new MadFlyLab({
@@ -31,17 +47,14 @@ const lab = new MadFlyLab({
   mode: params.get('mode') ?? 'auto',
   circuit: params.get('circuit') ?? 'courtship',
   camera: 'chase',
-  // MUST stay comfortably bigger than the station ring below (arrangeInRing(16)
-  // -> bounds must clear 16 with margin on every approach). It used to be 17
-  // (bounds 15), 1 unit SMALLER than the ring radius -- so the four
-  // axis-aligned stations (Screen, Sugar Cube, Hazard Fan, Workstation) sat
-  // just past the wall, and the fly's wall-bounce (position clamp + turn back
-  // toward centre + speed cut, see LabAvatar.act) fired right as it arrived,
-  // aborting the approach almost every time. Measured live: the fly's scent
-  // signal (the only thing that steers it toward a station) stayed at a flat
-  // 0 until it happened to wander within scentRadius, and it rarely got that
-  // close before being walled off first.
-  arenaSize: 22,
+  // MUST stay comfortably bigger than the station ring below -- bounds is
+  // arenaSize - 2, and the ring has to clear it with room to approach from any
+  // side. This was once 17 against a ring of 16, i.e. bounds 15, a wall INSIDE
+  // the ring: the four axis-aligned stations sat just past it and the
+  // wall-bounce (position clamp + turn back toward centre + speed cut, see
+  // LabAvatar.act) fired right as she arrived, aborting the approach nearly
+  // every time. 17 is fine again now only because the ring came in to 11.
+  arenaSize: 17,
   avatarOptions: { seed: params.get('seed') ?? undefined },
 });
 
@@ -74,23 +87,27 @@ function buildRoom1() {
   // to differ (VA6 radius 9, DM1 radius 7, and DM1 tinted a dimmer cyan), which
   // made the fly look like it liked one food and avoided the other -- it was
   // simply smelling one from further away and seeing it better.
+  // SCENT RADIUS IS TIED TO THE RING RADIUS, so change them together. The four
+  // scent stations sit 90 degrees apart (see the `order` passed to
+  // arrangeInRing), which puts 1.414 * ringRadius between neighbouring plumes:
+  // at ring 11 that is 15.6, so a radius of 8 leaves them just touching rather
+  // than smeared into each other, and still reaches to within 3 of the arena
+  // centre so she picks a smell up almost anywhere. 8 was the original value
+  // here and was never the problem -- the ring at 16 was, because it put every
+  // plume out of reach of where she actually walked.
   lab.addStation(new Station.FoodBowl({
-    scentRadius: 12, scentType: 'ORN_VA6',
+    scentRadius: SCENT_RADIUS, scentType: 'ORN_VA6',
     onKick: () => log('forage: reached the VA6 bowl'),
   }));
 
   // A sugar cube and a rotten one: matte, unlit, identical but for the odour, so
   // only the smell can decide anything. ORN_DM1 is a real attractive glomerulus,
   // ORN_V the real CO2 one a live fly avoids.
-  // scentRadius raised 8 -> 12 (matching Mate's own default) -- at 8, in a
-  // now-bigger room with an unchanged 16-radius station ring, a wandering fly
-  // measurably never got close enough to smell any of these until it was
-  // nearly on top of the ring; see the arenaSize comment above.
   lab.addStation(new Station.SugarCube({
-    scentRadius: 12,
+    scentRadius: SCENT_RADIUS,
     onTaste: (on) => on && log('sugar: tasting → DNp06'),
   }));
-  lab.addStation(new Station.PoopCube({ scentRadius: 12 }));
+  lab.addStation(new Station.PoopCube({ scentRadius: SCENT_RADIUS }));
 
   // 4. Hazard Fan -- looming threat, rotor in a vertical plane facing the arena
   //    so the blades genuinely expand across the fly's visual field.
@@ -118,8 +135,11 @@ function buildRoom1() {
   // 7. Mate -- the missing half of the courtship circuit. Nothing in the arena
   //    emitted on the real pheromone channels before this, so ORN_DA1 -> pC1/aSP
   //    -> DNp13 sat at rest no matter what the fly did.
+  // Same scent radius as the food, deliberately: Mate's own default is 12, and
+  // leaving it there while the bowls came down to 8 would have handed the
+  // pheromone a reach advantage that had nothing to do with the connectome.
   lab.addStation(new Station.Mate({
-    receptiveness: 1.0,
+    receptiveness: 1.0, scentRadius: SCENT_RADIUS,
     onCourtship: (v, m) => log(m.courting
       ? `courtship: DNp13 ${v.toFixed(2)} — real copulation-attempt drive`
       : 'courtship: DNp13 fell back below threshold'),
@@ -137,7 +157,7 @@ function buildRoom1() {
   // blended them into a single smear instead of four choosable sources; and it
   // put every attractive thing in one arc, so a fly following her nose never
   // had cause to visit the other half of the room.
-  lab.arrangeInRing(16, {
+  lab.arrangeInRing(RING_RADIUS, {
     order: ['Food Bowl (VA6)', 'Screen', 'Sugar Cube', 'Light Switch',
       'Poop Cube', 'Workstation', 'Mate', 'Hazard Fan'],
   });
