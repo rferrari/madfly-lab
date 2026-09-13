@@ -36,6 +36,21 @@ let genotypeIndex = 0;
 const RING_RADIUS = 11;
 const SCENT_RADIUS = 8;
 
+/**
+ * Which real glomerulus the switchable bait emits.
+ *
+ * ORN_VA6 for all of them, sharing the Food Bowl's channel rather than each
+ * getting its own, because there are only two genuinely attractive food
+ * glomeruli in the shipped packs (DM1 and VA6) and eight places to put bait.
+ * With one plume live at a time the channel does not need to be unique -- she
+ * goes to the only thing she can smell. Give two bait sources DIFFERENT
+ * channels (one DM1, one VA6) if you want a real two-way preference test.
+ */
+const LURE_SCENT = 'ORN_VA6';
+
+/** host station -> its switchable bait. Filled in by buildRoom1. */
+const baitFor = new Map();
+
 const params = new URLSearchParams(location.search);
 
 const lab = new MadFlyLab({
@@ -162,7 +177,44 @@ function buildRoom1() {
       'Poop Cube', 'Workstation', 'Mate', 'Hazard Fan'],
   });
 
-  mountStationPanel();
+  // BAIT. Added after arrangeInRing on purpose -- these are not ring stations
+  // and must not take ring slots; each is parked just in front of a host,
+  // between it and the arena centre, so walking to the food puts her at the
+  // station.
+  //
+  // This is the lever for driving her to a station that has no pull of its own.
+  // Half the ring emits no scent at all (screen, lights, workstation, fan) and
+  // she only ever reaches those by blundering into them; smell is the one sense
+  // that actually steers her. Rather than invent a smell for a monitor, put
+  // real food next to the monitor and switch it on.
+  //
+  // All off at boot -- eight live plumes would be exactly the smear the
+  // interleaved ring ordering exists to avoid. Switch on the one you want.
+  const hosts = [...lab.stations];
+  for (const host of hosts) {
+    const r = Math.hypot(host.position.x, host.position.z) || 1;
+    // Far enough out that the two meshes do not intersect, near enough that
+    // standing at the food is inside the host's own kickRadius -- checked for
+    // every station in the ring, the tightest being the VA6 bowl (1.15 vs 1.2).
+    const gap = host.collisionRadius + 0.5;
+    const bait = new Station.FoodBowl({
+      scentType: LURE_SCENT,
+      scentRadius: SCENT_RADIUS,
+      label: null,          // the host's own floor label is right there
+      collisionRadius: 0.45,
+      enabled: false,
+      color: 0xffc857,      // amber, so bait reads as bait and not as the VA6 bowl
+      position: [host.position.x - (host.position.x / r) * gap, 0,
+        host.position.z - (host.position.z / r) * gap],
+      onKick: Triggers.throttle(3, () => log(`bait: she took the food at ${host.name}`)),
+    });
+    bait.isBait = true;
+    bait.hostName = host.name;
+    lab.addStation(bait);
+    baitFor.set(host, bait);
+  }
+
+  mountStationPanel(hosts);
 }
 
 /**
@@ -176,7 +228,7 @@ function buildRoom1() {
  * the strongest signal is gone -- no new attraction invented, just the
  * competition removed.
  */
-function mountStationPanel() {
+function mountStationPanel(hosts) {
   const root = document.createElement('div');
   // bottom:64px clears the #log toast at bottom:16px, the same way the Room 2
   // training HUD does.
@@ -194,32 +246,58 @@ function mountStationPanel() {
     + `cursor:pointer;font:10px ${CSS.font};border:none;color:#fff;background:${CSS.violet};`;
   root.appendChild(foodBtn);
 
+  const head = document.createElement('div');
+  head.style.cssText = `display:grid;grid-template-columns:1fr 34px;gap:4px;`
+    + `color:${CSS.dim};font-size:8px;letter-spacing:0.1em;margin-bottom:3px;`;
+  head.innerHTML = '<span>STATION</span><span style="text-align:center">BAIT</span>';
+  root.appendChild(head);
+
   const grid = document.createElement('div');
-  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px;';
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 34px;gap:4px;';
   root.appendChild(grid);
 
-  const food = lab.stations.filter((s) => s.edible);
-  const chips = lab.stations.map((station) => {
+  // Only the ring stations get a row. The bait sources are stations too (that
+  // is how they get scent, taste and switching for free) but they belong to a
+  // host, so they appear as that host's second button rather than as rows of
+  // their own.
+  const food = hosts.filter((s) => s.edible);
+  const rows = hosts.map((station) => {
     const chip = document.createElement('button');
     chip.title = station.name;
     chip.textContent = station.name.replace(/ \(.*\)$/, '');
     chip.style.cssText = `padding:5px 4px;border-radius:4px;cursor:pointer;font:9px ${CSS.font};`
-      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;';
     chip.onclick = () => {
       station.setEnabled(!station.enabled);
       log(`${station.name} ${station.enabled ? 'ON' : 'OFF'}`);
       paint();
     };
     grid.appendChild(chip);
-    return { chip, station };
+
+    const bait = baitFor.get(station);
+    const baitBtn = document.createElement('button');
+    baitBtn.textContent = '🍯';
+    baitBtn.title = `Put food in front of ${station.name} to draw her there`;
+    baitBtn.style.cssText = `padding:5px 0;border-radius:4px;cursor:pointer;font-size:10px;`;
+    baitBtn.onclick = () => {
+      bait.setEnabled(!bait.enabled);
+      log(`bait at ${station.name} ${bait.enabled ? 'ON — she should come' : 'OFF'}`);
+      paint();
+    };
+    grid.appendChild(baitBtn);
+    return { chip, baitBtn, station, bait };
   });
 
   function paint() {
-    for (const { chip, station } of chips) {
+    for (const { chip, baitBtn, station, bait } of rows) {
       chip.style.background = station.enabled ? CSS.panel : 'transparent';
       chip.style.color = station.enabled ? CSS.bone : CSS.dim;
       chip.style.border = `1px solid ${station.enabled ? CSS.cyan : CSS.border}`;
       chip.style.opacity = station.enabled ? '1' : '0.5';
+
+      baitBtn.style.background = bait.enabled ? 'rgba(255, 200, 87, 0.25)' : 'transparent';
+      baitBtn.style.border = `1px solid ${bait.enabled ? CSS.amber : CSS.border}`;
+      baitBtn.style.opacity = bait.enabled ? '1' : '0.35';
     }
     const anyFood = food.some((s) => s.enabled);
     foodBtn.textContent = anyFood ? '⏻ ALL FOOD OFF' : '⏻ ALL FOOD ON';

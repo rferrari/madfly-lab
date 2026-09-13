@@ -132,6 +132,14 @@ export class MadFlyLab {
       station.labelMesh = label;
       this.arena.add(label);
     }
+    // A station added switched off must LOOK switched off. setEnabled handles
+    // this on a later toggle, but it early-returns when the flag already
+    // matches, so a station constructed with `enabled: false` used to spawn
+    // fully visible and only vanish once someone toggled it twice.
+    if (!station.enabled) {
+      object3D.visible = false;
+      if (station.labelMesh) station.labelMesh.visible = false;
+    }
     station.attach(this);
   }
 
