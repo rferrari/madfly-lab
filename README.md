@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./packs/madfly.png" alt="MadFly Lab" width="360">
+<img src="./public/madfly.png" alt="MadFly Lab" width="360">
 
 # 🪰 MadFly Lab
 

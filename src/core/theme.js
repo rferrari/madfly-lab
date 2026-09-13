@@ -1,6 +1,6 @@
 /**
  * MadFly Lab palette -- neon on deep violet-black, taken from the project's own
- * lab art (madfly.png). Every panel, gizmo and trace in the framework
+ * lab art. Every panel, gizmo and trace in the framework
  * pulls from here so a scene that adds its own stations still looks like it
  * belongs in the same lab.
  */

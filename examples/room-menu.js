@@ -48,7 +48,7 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
   root.id = 'madfly-room-menu';
   Object.assign(root.style, {
     position: 'fixed', inset: '0', display: 'none', placeItems: 'center',
-    background: 'rgba(11, 6, 20, 0.82) url(/madfly_lab_menu_bg.png) center/cover no-repeat',
+    background: 'rgba(11, 6, 20, 0.82) url(/public/madfly_lab_menu_bg.png) center/cover no-repeat',
     backdropFilter: 'blur(6px)',
     zIndex: '30', font: `12px ${CSS.font}`, color: CSS.bone,
   });
