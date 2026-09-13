@@ -360,7 +360,10 @@ export class LabObserver {
         lab.genotype
           ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
           : '',
-        avatar.feeding
+        // "Feeding" is a Room 1 concept (it suppresses locomotion at a food
+        // bowl); a tethered fly isn't at a bowl, so showing it in Room 2 would
+        // just be confusing cross-talk from whatever else is driving DNp06.
+        avatar.feeding && lab.room !== 'tethered-rig'
           ? `<span style="color:${CSS.lime}">FEEDING · DNp06 ${avatar.motor.feeding.toFixed(2)}</span>`
           : '',
       ];

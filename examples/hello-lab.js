@@ -167,4 +167,13 @@ function log(msg) {
 }
 
 window.lab = lab;
-console.info('MadFly Lab ready. 1-4 camera · R reset · N new fly · T touch · H hide HUD');
+
+// Room 2 (tethered training rig) menu -- press M. Kept as a separate module
+// since choosing which room/task to enter is scene glue, not framework code.
+import('./room-menu.js').then(({ mountRoomMenu }) => {
+  mountRoomMenu(lab, { onLog: log });
+});
+
+console.info('MadFly Lab ready. 1-4 camera · N new fly · R reset · P poke (or click the fly) · '
+  + 'L lights · F fan · B brightness · C circuit · V brain view · +/- brain zoom · '
+  + 'shift+G genotype · shift+R record · M room menu · H hide HUD');

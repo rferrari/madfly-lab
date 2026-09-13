@@ -131,6 +131,8 @@ export class LabAvatar {
     this.feeding = false;
     this.spontaneousSpeed = spontaneousSpeed;
     this.chemotaxis = chemotaxis;
+    /** Room 2 (tethered rig): world movement is suppressed. See act(). */
+    this.tethered = false;
     this.chemotaxisGain = chemotaxisGain;
     this.chemotaxisFloor = chemotaxisFloor;
     this.odourTurn = 0;
@@ -384,7 +386,16 @@ export class LabAvatar {
     this.motor.feeding = feeding;
     this.feeding = feeding > this.feedThreshold;
 
-    if (escape > 0.35 && time > this.escapeUntil) {
+    // TETHERED MODE (Room 2): the whole point of a tethered rig is to isolate
+    // central-brain updates and learning from locomotion -- the fly is held in
+    // place, so it never walks, turns from escape/chemotaxis/feeding, or hits
+    // a wall. Real motor channels above are still read every tick (a scene can
+    // still react to them, e.g. to drive scripted leg gestures); only the
+    // WORLD-MOVEMENT consequences of them are suppressed.
+    if (this.tethered) {
+      this.speed = 0;
+      this.velocity.set(0, 0, 0);
+    } else if (escape > 0.35 && time > this.escapeUntil) {
       this.escapeUntil = time + 0.6;
       // Escape is away from whichever side the loom came from.
       const away = this.sensors.loomR > this.sensors.loomL ? -1 : 1;
@@ -414,28 +425,30 @@ export class LabAvatar {
       this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     }
 
-    this.speed = Math.min(this.speed, this.maxSpeed);
-    this.velocity.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(this.speed);
-    this.position.addScaledVector(this.velocity, dt);
+    if (!this.tethered) {
+      this.speed = Math.min(this.speed, this.maxSpeed);
+      this.velocity.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(this.speed);
+      this.position.addScaledVector(this.velocity, dt);
 
-    // Arena walls. Hitting one is a real tactile event -- same mechanosensory
-    // cells as bumping a station -- and it turns the fly back INWARD.
-    //
-    // Mirror reflection was not enough: reflecting off x then z can leave the
-    // heading oscillating between two walls, and the fly parks in a corner.
-    // Aiming it at the middle with a random spread instead is what gets it
-    // back into the lab.
-    const b = this.bounds;
-    const hitX = Math.abs(this.position.x) > b;
-    const hitZ = Math.abs(this.position.z) > b;
-    if (hitX || hitZ) {
-      if (hitX) this.position.x = Math.sign(this.position.x) * b;
-      if (hitZ) this.position.z = Math.sign(this.position.z) * b;
-      const inward = Math.atan2(-this.position.x, -this.position.z);
-      this.yaw = inward + (Math.random() - 0.5) * 1.2;
-      this.speed *= 0.4;
-      this.touch(0.5);
-      this.onWall?.(this);
+      // Arena walls. Hitting one is a real tactile event -- same mechanosensory
+      // cells as bumping a station -- and it turns the fly back INWARD.
+      //
+      // Mirror reflection was not enough: reflecting off x then z can leave the
+      // heading oscillating between two walls, and the fly parks in a corner.
+      // Aiming it at the middle with a random spread instead is what gets it
+      // back into the lab.
+      const b = this.bounds;
+      const hitX = Math.abs(this.position.x) > b;
+      const hitZ = Math.abs(this.position.z) > b;
+      if (hitX || hitZ) {
+        if (hitX) this.position.x = Math.sign(this.position.x) * b;
+        if (hitZ) this.position.z = Math.sign(this.position.z) * b;
+        const inward = Math.atan2(-this.position.x, -this.position.z);
+        this.yaw = inward + (Math.random() - 0.5) * 1.2;
+        this.speed *= 0.4;
+        this.touch(0.5);
+        this.onWall?.(this);
+      }
     }
 
     if (this.object3D) {

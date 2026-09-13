@@ -267,6 +267,27 @@ behaviour belongs after the brain, where it is visible as engineering.
 Anything engineered must also respect lesions: spontaneous drive is suppressed
 when DNp09 is silenced, or `paralysed` would still walk.
 
+A third: **Room 2's leg gestures** (`src/avatar/leg-rig.js`). A tap/sweep/kick
+is a scripted animation triggered by whatever decided the action (a QReadout,
+in the blackjack example) -- this framework has no nerve cord, so there is
+nothing downstream of a descending neuron to animate a joint from. Same rule
+as the other two: don't fake it by wiring a leg to a motor neuron directly.
+
+## Room 2 (tethered rig): keep the loop task-agnostic
+
+`src/training/training-loop.js` must stay ignorant of any specific task. It
+takes a plain `{start, step, state, encodeState, describe}` object (see the
+file's own docstring) and knows nothing about cards, mazes, or anything else.
+If you add a new tethered task, its game rules and its stimulus→real-ORN
+encoding belong in `examples/<task>/`, not in `src/training/`, the same way
+`examples/blackjack/` is entirely blackjack and `src/training/q-learning.js`
+has never heard of a card. A generalization that leaks task-specific logic
+into `TrainingLoop` defeats the point of having it be a framework primitive.
+
+`QReadout`'s features come from real, calibrated DN channels, chosen per task
+(blackjack reads `DNa01_L/R`, `DNp03`, `DNp13`). Pick channels for what a
+scene's decision is actually downstream of; there's no fixed "correct" set.
+
 ## Before you call it done
 
 ```bash

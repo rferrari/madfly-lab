@@ -32,6 +32,7 @@ import { LabObserver } from '../observer/lab-observer.js';
 import { ScreenRecorder } from '../observer/screen-recorder.js';
 import { resolveGenotype, describeGenotype } from '../avatar/genotype.js';
 import { CIRCUITS } from '../circuits.js';
+import { buildTetheredRig, frameTetheredCamera } from '../rooms/tethered-rig.js';
 
 const MAX_CATCHUP_STEPS = 4;
 
@@ -87,6 +88,14 @@ export class MadFlyLab {
 
     // Screen recording will be initialized after arena is created
     this.screenRecorder = null;
+
+    /**
+     * Which room is active: 'free-roaming' (Room 1, the default arena) or
+     * 'tethered-rig' (Room 2). See setRoom().
+     */
+    this.room = 'free-roaming';
+    this._tetheredRig = null;   // {group, orb, legRig} while in Room 2
+    this._savedRoom1 = null;    // stations/camera/vision/bounds set aside
   }
 
   /** Drop a station into the lab. Safe before or after `start()`. */
@@ -333,8 +342,18 @@ export class MadFlyLab {
     // Drop the backlog rather than spiral after a long stall (tab switch, GC).
     if (steps === MAX_CATCHUP_STEPS) this._accumulator = 0;
 
-    this.arena.updateCamera(this.avatar);
-    this._orientLabels();
+    if (this.room === 'tethered-rig') {
+      frameTetheredCamera(this.arena.camera);
+      if (this._tetheredRig) {
+        this._tetheredRig.orb.update(
+          this.brain.runtime?.activationView?.(), frameDt, this.brain.runtime?.cloud,
+        );
+        this._tetheredRig.legRig.update(frameDt);
+      }
+    } else {
+      this.arena.updateCamera(this.avatar);
+      this._orientLabels();
+    }
     this.arena.render();
     this.observer?.update(this, frameDt);
 
@@ -514,11 +533,105 @@ export class MadFlyLab {
     }
   }
 
+  /** The scripted leg-gesture rig, while Room 2 is active; otherwise null. */
+  get legRig() { return this._tetheredRig?.legRig ?? null; }
+
   /** Cycle through the circuits the framework ships packs for. */
   async cycleCircuit() {
     const names = Object.keys(CIRCUITS);
     const i = names.indexOf(this.brain.circuit);
     return this.setCircuit(names[(i + 1) % names.length]);
+  }
+
+  /**
+   * Switch between Room 1 (free-roaming) and Room 2 (tethered training rig).
+   *
+   * Same avatar, same brain -- only the room around them changes. Room 2
+   * hides Room 1's stations (their scent fields would otherwise keep driving
+   * the brain during training, exactly the "physical locomotion noise" a
+   * tethered rig exists to remove), freezes the avatar in place
+   * (`avatar.tethered = true` -- see LabAvatar.act()), and swaps in the
+   * platform/brain-orb/leg-rig scene from rooms/tethered-rig.js. Task-specific
+   * equipment (a card table, a math screen) is NOT built here -- a scene adds
+   * its own station at `DOCK_POSITION` after switching, the same way Room 1
+   * stations are added via `addStation()`.
+   *
+   * @param {'free-roaming'|'tethered-rig'} name
+   */
+  setRoom(name) {
+    if (name === this.room) return this.room;
+    if (name !== 'free-roaming' && name !== 'tethered-rig') {
+      throw new Error(`[MadFlyLab] unknown room "${name}". Known: free-roaming, tethered-rig`);
+    }
+
+    if (name === 'tethered-rig') {
+      // Set Room 1 aside rather than disposing it, so switching back is cheap
+      // and lossless -- restarting Mode B / re-minting the fly would also
+      // reset the very brain state Room 2 exists to isolate and observe.
+      this._savedRoom1 = {
+        stations: this.stations,
+        visionEnabled: this.visionEnabled,
+        bounds: this.avatar.bounds,
+        position: this.avatar.position.clone(),
+        yaw: this.avatar.yaw,
+        cameraMode: this.cameraMode,
+      };
+      for (const station of this.stations) {
+        if (station.object3D) this.arena.remove(station.object3D);
+        if (station.labelMesh) this.arena.remove(station.labelMesh);
+        station.detach(); // stops scent/wind emitters -- no Room 1 noise in Room 2
+      }
+      this.stations = [];
+
+      this.avatar.tethered = true;
+      this.avatar.reset([0, 0.42, 0], 0);
+      // Vision is switched off in the tethered rig by default: this room's
+      // reference task (see examples/blackjack/) drives the brain purely
+      // through olfactory channels, deliberately -- "visual input was tried
+      // first and did not reach the central brain" in the demo this room is
+      // modelled on. A scene using the DIRECT VISUAL CHANNEL a different task
+      // might want can re-enable it after switching (`lab.visionEnabled =
+      // true`); this default just avoids paying for eye rendering nobody asked
+      // for.
+      this.visionEnabled = false;
+
+      const rig = buildTetheredRig(this.brain.pack ?? this.brain.runtime);
+      this.arena.add(rig.group);
+      // legRig is already parented to rig.group at its intended WORLD position
+      // (see buildTetheredRig) -- do not also parent it under the avatar.
+      // THREE.Object3D.add() re-parents rather than duplicating, so an
+      // earlier version of this line silently moved it OUT of rig.group and
+      // reinterpreted its (0, 0.5, 0) position as avatar-LOCAL instead of
+      // world, which (combined with the avatar's own position/scale) put the
+      // legs floating well above the body instead of under it.
+      this._tetheredRig = rig;
+
+      this.room = 'tethered-rig';
+    } else {
+      // Back to free-roaming: tear down Room 2's scenery and restore Room 1.
+      if (this._tetheredRig) {
+        this.arena.remove(this._tetheredRig.group); // legRig goes with it, as its child
+        this._tetheredRig.orb.dispose();
+        this._tetheredRig = null;
+      }
+      this.avatar.tethered = false;
+      if (this._savedRoom1) {
+        this.stations = this._savedRoom1.stations;
+        for (const station of this.stations) this._spawn(station);
+        this.visionEnabled = this._savedRoom1.visionEnabled;
+        this.avatar.bounds = this._savedRoom1.bounds;
+        this.avatar.reset(
+          [this._savedRoom1.position.x, this._savedRoom1.position.y, this._savedRoom1.position.z],
+          this._savedRoom1.yaw,
+        );
+        this.cameraMode = this._savedRoom1.cameraMode;
+        this._savedRoom1 = null;
+      }
+      this.room = 'free-roaming';
+    }
+
+    console.info(`[MadFlyLab] room -> ${this.room}`);
+    return this.room;
   }
 
   /**

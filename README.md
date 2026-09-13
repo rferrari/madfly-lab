@@ -209,6 +209,7 @@ make            # list every target
 | `L` lights · `B` brightness | kill or raise the lab lighting |
 | `V` · `+` / `-` | brain view (rotate/front/left/right/top) and zoom |
 | `H` | hide the HUD |
+| `M` | room menu — free-roaming / tethered rig / chaos chair |
 
 ### What else is in here
 
@@ -260,15 +261,73 @@ The connectivity is real. The labels we put on top of it are ours.
 
 ---
 
+## Room 2 — Tethered Training Rig
+
+A second room, alongside the free-roaming arena: the fly is held stationary
+(no locomotion, no wall bumps, no escape jumps -- see `avatar.tethered`) under
+a floating, magnified point-cloud of its own real brain, with a mount point in
+front for training equipment. It exists to isolate central-brain updates and
+learning from locomotion noise -- the same reason a real neuroscience rig
+tethers the animal.
+
+```javascript
+lab.setRoom('tethered-rig');   // freezes the avatar, swaps in the rig scene
+// ... add your own equipment at DOCK_POSITION, same as any Room 1 station
+lab.setRoom('free-roaming');   // restores Room 1 exactly as it was
+```
+
+Or just press **M** in the example for a small room-select menu (Free-Roaming
+/ Tethered Rig / a "Chaos Chair" easter egg that mints a random genotype on a
+random circuit and cranks the lights).
+
+**What's framework, what's example.** `src/rooms/tethered-rig.js` (the
+platform/orb/leg-rig scene) and `src/training/{q-learning,training-loop}.js`
+(a generic, task-agnostic sense→settle→read→decide→act→learn loop and its
+linear TD-learning readout) are framework code, exported from `mad-fly-lab`
+like anything else. The actual task -- what's being trained on -- is not:
+`examples/blackjack/` plays Blackjack (matching Gymnasium's `Blackjack-v1`
+spec exactly: infinite deck, Hit/Stand only, dealer stands on 17), inspired by
+NeuroMechFly's own blackjack demo. A different tethered task (a maze, a colour
+choice) would live in its own `examples/` folder, plugging into the same
+`TrainingLoop`.
+
+**The architecture, stated plainly, because it's easy to overclaim here.** The
+connectome has no synaptic plasticity anywhere in this framework -- nothing
+ships a weight-update rule. So the brain cannot learn blackjack no matter how
+long it runs; it is a fixed, real feature extractor. What learns is `QReadout`:
+a small linear function of four real, calibrated descending-neuron readings
+(`DNa01_L/R`, `DNp03`, `DNp13`), trained by ordinary Q-learning. The PAM11
+dopamine / PPL1 aversive pulses on each win/loss are a real reward signal into
+the real network -- they are simply not the mechanism fitting the weights.
+This mirrors NeuroMechFly's own finding exactly: **the real connectome did not
+beat random features.** Measured here, over 8,000 training hands and a 2,000-
+hand greedy evaluation: **avg reward −0.20, win rate 36.9%** -- clearly better
+than a random policy (−0.36) but well short of even a naive "hit below 17"
+heuristic (−0.07), let alone optimal play (−0.005). That gap is the point, not
+a bug to chase away.
+
+Two more things are engineered rather than derived from the brain, and are
+labelled as such in the code: the card→smell encoding (`ORN_DM1`/`ORN_VA6`/
+`ORN_DA1` ← player total / dealer upcard / usable ace) is an arbitrary mapping,
+exactly as arbitrary as the reference demo's own; and the leg-tap/sweep/kick
+gesture is a scripted animation, not motor output -- this framework has no
+nerve cord, same as the demo it's modelled on.
+
 ## Architecture
 
 ```
 src/
   core/      lab.js · arena.js · station.js · gradients.js · theme.js
-  avatar/    lab-avatar.js · retina.js · motion.js · olfaction.js
+  avatar/    lab-avatar.js · retina.js · motion.js · olfaction.js · leg-rig.js
   brain/     lab-brain.js · pruned-runtime.js · remote-runtime.js · pack-loader.js
-  observer/  lab-observer.js · retinal-view.js · soma-cloud.js · telemetry.js
-  stations/  slot-machine.js · food-bowl.js · hazard-fan.js
+  observer/  lab-observer.js · retinal-view.js · soma-cloud.js · brain-orb.js · telemetry.js
+  stations/  slot-machine.js · food-bowl.js · hazard-fan.js · cube.js
+  rooms/     tethered-rig.js               (Room 2's scene: platform, orb, dock)
+  training/  q-learning.js · training-loop.js   (generic, task-agnostic)
+examples/
+  hello-lab.js · room-menu.js
+  blackjack/   blackjack.js · blackjack-sensory.js · blackjack-task.js ·
+               card-table.js · tethered-scene.js
 python/
   madfly_lab/  connectome.py · circuits.py · prune.py · pack.py · brain.py · server.py
 packs/       generated .mflpack binaries (not committed)
