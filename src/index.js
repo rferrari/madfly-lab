@@ -40,7 +40,10 @@ export { THEME, CSS } from './core/theme.js';
 
 export { LabAvatar } from './avatar/lab-avatar.js';
 export { mintFly } from './avatar/mint.js';
-export { PRESETS as GENOTYPES, resolveGenotype, describeGenotype } from './avatar/genotype.js';
+export {
+  PRESETS as GENOTYPES, resolveGenotype, describeGenotype, explainGenotype,
+  explainChannel, CHANNEL_GLOSSARY,
+} from './avatar/genotype.js';
 export { CompoundEye, fovForRetina } from './avatar/retina.js';
 export { LoomingDetector } from './avatar/motion.js';
 export { OlfactoryReceptors, OLFACTORY_CHANNELS } from './avatar/olfaction.js';

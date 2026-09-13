@@ -70,6 +70,14 @@ export class OdourCube extends Station {
       this.onTaste?.(onIt, this);
     }
   }
+
+  /** Taste is latched and a disabled station stops ticking -- see FoodBowl. */
+  onDisabled() {
+    if (!this._tasting) return;
+    this._tasting = false;
+    this.lab?.brain.setInput('taste', 0);
+    this.onTaste?.(false, this);
+  }
 }
 
 /** White sugar cube -- ORN_DM1, a real attractive food glomerulus. */

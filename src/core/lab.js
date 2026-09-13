@@ -738,9 +738,27 @@ export class MadFlyLab {
    * Stations placed at explicit positions tend to end up in one quadrant, and
    * the fly walks out of the experiment; a ring keeps it surrounded.
    */
-  arrangeInRing(radius = 9, { startAngle = 0 } = {}) {
-    const n = this.stations.length;
-    this.stations.forEach((station, i) => {
+  /**
+   * @param {number} radius
+   * @param {object} [opts]
+   * @param {number} [opts.startAngle]
+   * @param {string[]} [opts.order] station names, in the order they should go
+   *   round the circle. Anything not named keeps its existing relative order
+   *   and follows on after; anything named but absent is skipped. Lets a scene
+   *   choose the LAYOUT without having to add its stations in that order, which
+   *   matters when neighbouring stations interact -- overlapping scent plumes,
+   *   for one.
+   */
+  arrangeInRing(radius = 9, { startAngle = 0, order = null } = {}) {
+    let ring = this.stations;
+    if (order) {
+      const rank = new Map(order.map((name, i) => [name, i]));
+      // Stable: unnamed stations sort after named ones, keeping their order.
+      ring = [...this.stations].sort((x, y) =>
+        (rank.get(x.name) ?? Number.MAX_SAFE_INTEGER) - (rank.get(y.name) ?? Number.MAX_SAFE_INTEGER));
+    }
+    const n = ring.length;
+    ring.forEach((station, i) => {
       const a = startAngle + (i / n) * Math.PI * 2;
       station.position.set(Math.cos(a) * radius, station.position.y, Math.sin(a) * radius);
       if (station.object3D) {

@@ -36,6 +36,9 @@ export class FoodBowl extends Station {
     this.scentType = scentType;
     this.nutrition = opts.nutrition ?? 1;
     this.consumed = 0;
+    /** Marks this as something the fly eats -- same flag OdourCube carries, so
+     *  "which stations are food" is one filter rather than a type check. */
+    this.edible = opts.edible ?? true;
     /** Contact radius for taste -- smaller than the scent field on purpose. */
     this.tasteRadius = opts.tasteRadius ?? 1.9;
     // Measured: the taste population is 1,428 real cells and setInput splits
@@ -114,5 +117,18 @@ export class FoodBowl extends Station {
       ctx.brain.setInput('taste', onFood ? this.tasteStrength : 0);
       this.onTaste?.(onFood, this);
     }
+  }
+
+  /**
+   * Taste is LATCHED -- `update` only writes it on a crossing of tasteRadius,
+   * and a disabled station stops ticking, so switching a bowl off while the fly
+   * was standing in it left the gustatory population driving at full strength
+   * with no bowl there. She would have gone on "eating" nothing indefinitely.
+   */
+  onDisabled() {
+    if (!this._tasting) return;
+    this._tasting = false;
+    this.lab?.brain.setInput('taste', 0);
+    this.onTaste?.(false, this);
   }
 }

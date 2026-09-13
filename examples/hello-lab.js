@@ -14,7 +14,9 @@
  *     the eye that saw it and kicks the real DNp01 Giant Fiber.
  */
 
-import { MadFlyLab, Station, Triggers, GENOTYPES, CIRCUITS } from '../src/index.js';
+import {
+  MadFlyLab, Station, Triggers, GENOTYPES, CIRCUITS, CSS, explainGenotype,
+} from '../src/index.js';
 
 let genotypeIndex = 0;
 
@@ -121,7 +123,95 @@ function buildRoom1() {
 
   // A tight ring keeps the fly inside the experiment. At radius 11 in a 40-unit
   // arena it simply walked out between the stations and hit the wall.
-  lab.arrangeInRing(16);
+  //
+  // ORDER MATTERS: arrangeInRing walks the station list and drops them around
+  // the circle in that order, so the array order IS the arena layout. The four
+  // stations that emit an ORN channel are interleaved with the four that emit
+  // nothing, rather than sitting next to each other as they did when they were
+  // added in build order. Two reasons. Adjacent plumes overlap at this radius
+  // (12-unit scent, ~12.25 between neighbours), so clustering the smelly ones
+  // blended them into a single smear instead of four choosable sources; and it
+  // put every attractive thing in one arc, so a fly following her nose never
+  // had cause to visit the other half of the room.
+  lab.arrangeInRing(16, {
+    order: ['Food Bowl (VA6)', 'Screen', 'Sugar Cube', 'Light Switch',
+      'Poop Cube', 'Workstation', 'Mate', 'Hazard Fan'],
+  });
+
+  mountStationPanel();
+}
+
+/**
+ * Per-station on/off switches -- the control half of the experiment.
+ *
+ * The fly only has a way to STEER toward a station that emits a scent (the
+ * antennae climb ORN gradients; see LabAvatar.sense). The screen, the light
+ * switch and the workstation emit nothing at all, so she reaches those only by
+ * walking into them, and with food in the room she never runs out of reasons
+ * not to. Switching the food off is the cleanest way to ask what she does when
+ * the strongest signal is gone -- no new attraction invented, just the
+ * competition removed.
+ */
+function mountStationPanel() {
+  const root = document.createElement('div');
+  // bottom:64px clears the #log toast at bottom:16px, the same way the Room 2
+  // training HUD does.
+  root.style.cssText = `position:fixed;bottom:64px;left:16px;width:212px;z-index:10;`
+    + `background:${CSS.panel};border:1px solid ${CSS.border};border-radius:8px;`
+    + `padding:8px 10px;backdrop-filter:blur(8px);font:11px ${CSS.font};color:${CSS.bone};`;
+
+  const title = document.createElement('div');
+  title.textContent = 'STATIONS';
+  title.style.cssText = `color:${CSS.violet};font-size:9px;letter-spacing:0.14em;margin-bottom:6px`;
+  root.appendChild(title);
+
+  const foodBtn = document.createElement('button');
+  foodBtn.style.cssText = `width:100%;padding:6px;margin-bottom:6px;border-radius:4px;`
+    + `cursor:pointer;font:10px ${CSS.font};border:none;color:#fff;background:${CSS.violet};`;
+  root.appendChild(foodBtn);
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px;';
+  root.appendChild(grid);
+
+  const food = lab.stations.filter((s) => s.edible);
+  const chips = lab.stations.map((station) => {
+    const chip = document.createElement('button');
+    chip.title = station.name;
+    chip.textContent = station.name.replace(/ \(.*\)$/, '');
+    chip.style.cssText = `padding:5px 4px;border-radius:4px;cursor:pointer;font:9px ${CSS.font};`
+      + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    chip.onclick = () => {
+      station.setEnabled(!station.enabled);
+      log(`${station.name} ${station.enabled ? 'ON' : 'OFF'}`);
+      paint();
+    };
+    grid.appendChild(chip);
+    return { chip, station };
+  });
+
+  function paint() {
+    for (const { chip, station } of chips) {
+      chip.style.background = station.enabled ? CSS.panel : 'transparent';
+      chip.style.color = station.enabled ? CSS.bone : CSS.dim;
+      chip.style.border = `1px solid ${station.enabled ? CSS.cyan : CSS.border}`;
+      chip.style.opacity = station.enabled ? '1' : '0.5';
+    }
+    const anyFood = food.some((s) => s.enabled);
+    foodBtn.textContent = anyFood ? '⏻ ALL FOOD OFF' : '⏻ ALL FOOD ON';
+  }
+
+  foodBtn.onclick = () => {
+    const turnOff = food.some((s) => s.enabled);
+    for (const s of food) s.setEnabled(!turnOff);
+    log(`food ${turnOff ? 'OFF' : 'ON'} — ${food.map((s) => s.name).join(', ')}`);
+    paint();
+  };
+
+  paint();
+  document.body.appendChild(root);
+  // Room 2 has its own stations and its own HUD; this panel is Room 1's.
+  lab.onFrame(() => { root.style.display = lab.room === 'free-roaming' ? 'block' : 'none'; });
 }
 
 // Real Giant Fiber escape. DNp01 firing is the fly deciding to leave. General
@@ -185,7 +275,11 @@ addEventListener('keydown', (e) => {
     const names = Object.keys(GENOTYPES);
     genotypeIndex = (genotypeIndex + 1) % names.length;
     const fly = lab.mintNewFly(names[genotypeIndex]);
-    log(`${GENOTYPES[names[genotypeIndex]].label}: ${GENOTYPES[names[genotypeIndex]].description}`);
+    // Say what she has LOST, not just which cells were silenced -- the raw
+    // names mean nothing without the fly-anatomy background.
+    const { headline, effects } = explainGenotype(lab.genotype);
+    log(`${GENOTYPES[names[genotypeIndex]].label} — ${headline}`
+      + (effects.length ? `  ·  ${effects[0]}` : ''));
     if (fly.requiresReload) log('…that genotype needs a different pack; reload with ?circuit= or ?mode=');
   }
 });

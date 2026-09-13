@@ -12,7 +12,7 @@
  */
 
 import { CSS } from '../core/theme.js';
-import { describeGenotype } from '../avatar/genotype.js';
+import { describeGenotype, explainGenotype } from '../avatar/genotype.js';
 import { RetinalView } from './retinal-view.js';
 import { SomaCloud } from './soma-cloud.js';
 import { Telemetry } from './telemetry.js';
@@ -373,9 +373,24 @@ export class LabObserver {
 
     // Update STATE panel with genotype and feeding info
     if (this.stateContent) {
+      // Cell names alone ("lesion: LC4, LC4_L, LC4_R") tell you nothing unless
+      // you already know the fly visual system, so the raw list is followed by
+      // what the lesion actually COSTS her. The per-cell breakdown goes in the
+      // title attribute rather than the panel: this column is 230px wide and
+      // some genotypes silence five populations.
+      const explained = lab.genotype ? explainGenotype(lab.genotype) : null;
       const stateItems = [
         lab.genotype
           ? `<span style="color:${CSS.dim}">genotype</span> <span style="color:${CSS.amber}">${describeGenotype(lab.genotype)}</span>`
+          : '',
+        explained?.headline
+          ? `<span style="color:${CSS.dim};font-style:italic">${explained.headline}</span>`
+          : '',
+        explained?.effects.length
+          ? `<span style="color:${CSS.cyan};font-size:9px">${explained.effects[0]}</span>`
+            + (explained.effects.length > 1
+              ? `<span style="color:${CSS.dim};font-size:9px"> +${explained.effects.length - 1} more (hover)</span>`
+              : '')
           : '',
         // "Feeding" is a Room 1 concept (it suppresses locomotion at a food
         // bowl); a tethered fly isn't at a bowl, so showing it in Room 2 would
@@ -387,6 +402,9 @@ export class LabObserver {
       const stateHTML = stateItems.filter(Boolean).join('<br>');
       // Always reserve space with at least a space character to prevent flicker
       this.stateContent.innerHTML = stateHTML || '&nbsp;';
+      this.stateContent.title = explained?.effects.length
+        ? `${explained.headline}\n\n${explained.effects.map((e) => `• ${e}`).join('\n')}`
+        : '';
     }
   }
 

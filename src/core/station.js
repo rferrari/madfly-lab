@@ -86,18 +86,26 @@ export class Station {
     this.lab = lab;
     const { scentType, scentRadius, scentStrength } = this.options;
     if (scentType) {
-      this._removeEmitter = lab.scent.emit(scentType, {
+      // Kept, not just registered: `setEnabled` has to be able to reach in and
+      // flip this emitter's own `enabled`. ScentField reads the flag off the
+      // EMITTER, and this object is a copy -- so a station that only set its
+      // own `this.enabled` went invisible and stopped ticking while its smell
+      // carried on filling the arena, and the fly kept walking to a bowl that
+      // was no longer there.
+      this._emitter = {
         position: this.position,
         radius: scentRadius ?? 5,
         strength: scentStrength ?? 1,
         enabled: this.enabled,
-      });
+      };
+      this._removeEmitter = lab.scent.emit(scentType, this._emitter);
     }
   }
 
   detach() {
     this._removeEmitter?.();
     this._removeEmitter = null;
+    this._emitter = null;
     this.lab = null;
   }
 
@@ -122,10 +130,27 @@ export class Station {
 
   distanceTo(position) { return this.position.distanceTo(position); }
 
+  /**
+   * Switch a station off without tearing it down -- the hook for "turn the food
+   * off and see where she goes instead".
+   *
+   * Turning one off has to silence EVERY channel it reaches the fly through,
+   * not just the visible mesh: its scent emitter (above), and whatever
+   * contact-range drive a subclass latches on (see `onDisabled`, which FoodBowl
+   * uses to drop the gustatory input it may have left switched on under her).
+   */
   setEnabled(on) {
+    if (on === this.enabled) return this;
     this.enabled = on;
     if (this.object3D) this.object3D.visible = on;
+    if (this.labelMesh) this.labelMesh.visible = on;
+    if (this._emitter) this._emitter.enabled = on;
+    if (!on) this.onDisabled();
+    return this;
   }
+
+  /** Subclass hook: drop anything this station is still driving. */
+  onDisabled() {}
 }
 
 /**

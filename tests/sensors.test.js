@@ -16,6 +16,7 @@ import { Station, Triggers } from '../src/core/station.js';
 import { FoodBowl } from '../src/stations/food-bowl.js';
 import { SlotMachine } from '../src/stations/slot-machine.js';
 import { LabAvatar } from '../src/avatar/lab-avatar.js';
+import { resolveGenotype, explainGenotype, explainChannel } from '../src/avatar/genotype.js';
 
 const W = 96;
 const H = 64;
@@ -380,6 +381,67 @@ describe('Station', () => {
     console.warn = (m) => warnings.push(m);
     try { new FoodBowl({ scentType: 'ORN_SMELLS_LIKE_PIZZA' }); } finally { console.warn = original; }
     assert.match(warnings.join(' '), /not one of the real glomerulus channels/);
+  });
+});
+
+describe('switching a station off', () => {
+  test('silences its scent, not just its mesh', () => {
+    const field = new ScentField();
+    const lab = { scent: field, brain: { setInput() {} } };
+    const bowl = new FoodBowl({ scentType: 'ORN_VA6', scentRadius: 8, position: [0, 0, 0] });
+    bowl.attach(lab);
+
+    const here = new THREE.Vector3(2, 0, 0);
+    assert.ok(field.sampleAt('ORN_VA6', here) > 0, 'should smell it while on');
+
+    bowl.setEnabled(false);
+    assert.equal(field.sampleAt('ORN_VA6', here), 0,
+      'a switched-off bowl must stop smelling, or the fly still walks to it');
+
+    bowl.setEnabled(true);
+    assert.ok(field.sampleAt('ORN_VA6', here) > 0, 'and come back when switched on');
+  });
+
+  test('drops the taste it had latched on', () => {
+    // update() only writes `taste` on a crossing of tasteRadius, and a disabled
+    // station stops ticking -- so switching one off under the fly used to leave
+    // the gustatory drive stuck on with no food there.
+    const writes = [];
+    const field = new ScentField();
+    const lab = { scent: field, brain: { setInput: (c, v) => writes.push([c, v]) } };
+    const bowl = new FoodBowl({ scentType: 'ORN_VA6', position: [0, 0, 0] });
+    bowl.attach(lab);
+
+    bowl.tick(0.016, { avatar: { position: new THREE.Vector3(0, 0, 0) }, brain: lab.brain });
+    assert.deepEqual(writes.at(-1), ['taste', bowl.tasteStrength], 'should be tasting');
+
+    bowl.setEnabled(false);
+    assert.deepEqual(writes.at(-1), ['taste', 0], 'switching it off must end the meal');
+  });
+});
+
+describe('explaining a lesion', () => {
+  test('translates cell names into what she can no longer do', () => {
+    const g = resolveGenotype('motion-blind');
+    const { headline, effects } = explainGenotype(g);
+    assert.ok(headline.length > 0);
+    // The point of the exercise: no bare "LC4_L" with nothing attached to it.
+    assert.ok(effects.every((e) => e.includes('—')), `unexplained entry in ${JSON.stringify(effects)}`);
+    assert.ok(effects.some((e) => /looming/i.test(e)), 'should say LC4 is the looming detector');
+  });
+
+  test('marks which side a one-sided lesion took', () => {
+    assert.ok(explainChannel('LPLC2_R').includes('right side'));
+    assert.ok(explainChannel('LPLC2_L').includes('left side'));
+  });
+
+  test('a blind fly is explained even with nothing silenced', () => {
+    const { effects } = explainGenotype(resolveGenotype('blind'));
+    assert.ok(effects.some((e) => /smell and touch/i.test(e)));
+  });
+
+  test('falls back to the bare name rather than inventing one', () => {
+    assert.equal(explainChannel('NOT_A_REAL_CHANNEL'), 'NOT_A_REAL_CHANNEL');
   });
 });
 

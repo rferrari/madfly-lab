@@ -126,6 +126,18 @@ export class HazardFan extends Station {
   /** Switch the fan on or off. Stops the blades AND the airflow. */
   toggle() { return this.setRunning(!this.running); }
 
+  /**
+   * Wind lives in its own emitter, so the base class (which only knows about
+   * the scent one) cannot silence it. Re-sync in BOTH directions: switching the
+   * fan off has to stop the airflow, and switching it back on must not restore
+   * wind for a fan that was not running in the first place.
+   */
+  setEnabled(on) {
+    super.setEnabled(on);
+    if (this._windEmitter) this._windEmitter.enabled = this.enabled && this.running;
+    return this;
+  }
+
   setRunning(on) {
     this.running = !!on;
     if (this._windEmitter) this._windEmitter.enabled = this.enabled && this.running;
