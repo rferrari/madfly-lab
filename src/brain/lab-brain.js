@@ -31,6 +31,13 @@ export const HZ_PER_ACTIVATION = 200;
 /** How long `mode: 'auto'` waits for a Mode A server before falling back. */
 export const AUTO_PROBE_MS = 6000;
 
+/**
+ * Ticks `readPhasic` spends seeding its baseline before it will report a rise.
+ * 240 at the default 60Hz brain is 4 simulated seconds -- the same settling
+ * time calibrate.py measures its references after. See readPhasic.
+ */
+export const PHASIC_WARMUP = 240;
+
 export class LabBrain {
   constructor({
     mode = 'pruned-subgraph',
@@ -57,6 +64,7 @@ export class LabBrain {
     this._loomState = new Map();
     this._steerBaseline = new Map();
     this._phasicBaseline = new Map();
+    this._phasicSeen = new Map();
   }
 
   get mode() { return this.runtime ? this.runtime.mode : this.requestedMode; }
@@ -244,7 +252,15 @@ export class LabBrain {
   }
 
   /** Forget adapted steering baselines (on reset / re-mint). */
-  resetSteering() { this._steerBaseline.clear(); this._phasicBaseline.clear(); return this; }
+  resetSteering() {
+    this._steerBaseline.clear();
+    this._phasicBaseline.clear();
+    // Re-arms the warm-up too -- a re-minted fly settles from scratch just like
+    // a freshly loaded one, and without this it would inherit the phantom-meal
+    // freeze described in readPhasic.
+    this._phasicSeen.clear();
+    return this;
+  }
 
   /**
    * PHASIC read: how far a channel has risen above its own recent resting
@@ -260,8 +276,26 @@ export class LabBrain {
    * What a behavioural gate actually wants to know is whether a signal went UP
    * when something happened. That is this.
    */
-  readPhasic(channel, { adaptRate = 0.004 } = {}) {
+  readPhasic(channel, { adaptRate = 0.004, warmup = PHASIC_WARMUP } = {}) {
     const v = this.readCalibrated(channel);
+
+    // WARM-UP. The baseline seeds itself to the first sample, so the very first
+    // read is correctly 0 -- but the network is not at rest when it is seeded.
+    // It climbs for the first few simulated seconds as the sensory populations
+    // drive it up from silence, and a baseline adapting at 0.004/tick cannot
+    // keep up with that. The gap reads as a big phasic RISE, which is exactly
+    // what a behavioural gate is watching for: measured, DNp06 cleared the
+    // 0.12 feeding threshold seconds after load with no food anywhere in the
+    // arena, so the fly stood frozen in a phantom meal at the spawn point --
+    // for ~4 simulated seconds every time the room was entered or a new fly
+    // minted. Track the value exactly while that settles, and report nothing.
+    const seen = (this._phasicSeen.get(channel) ?? 0) + 1;
+    this._phasicSeen.set(channel, seen);
+    if (seen <= warmup) {
+      this._phasicBaseline.set(channel, v);
+      return 0;
+    }
+
     const prev = this._phasicBaseline.get(channel) ?? v;
     this._phasicBaseline.set(channel, prev + (v - prev) * adaptRate);
     return v - prev;

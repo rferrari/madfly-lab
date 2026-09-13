@@ -112,6 +112,43 @@ export class LabAvatar {
     chemotaxis = true,
     chemotaxisGain = 1.9,
     chemotaxisFloor = 0.02,
+    /**
+     * rad/s per unit of bilateral odour difference (OlfactoryReceptors.lateral,
+     * ~[-1,1]), clamped by `odourTurnCap` below.
+     *
+     * Large because the signal is small and, more to the point, because it does
+     * NOT grow as she closes in: measured against the shipped 12-unit scent
+     * radius, `lateral()` reads ~0.16 at the very edge of a plume but settles
+     * to a near-constant ~0.025-0.03 anywhere inside it. A constant turn rate
+     * at a constant walking speed is a CIRCLE of radius v/omega -- which is
+     * precisely what a gentler gain did: at 6.0 she tracked the source
+     * faithfully and then orbited it at ~5-6 units forever without arriving.
+     * Swept over four approach geometries (dead ahead, 60 deg off to one side,
+     * directly behind, and sugar-versus-rot), 6.0 stalls 1.6-4.8 units out
+     * while anything from ~20 up closes to touching distance in all four. 30
+     * sits in the middle of that working range rather than at its edge.
+     */
+    odourTurnGain = 30.0,
+    /**
+     * Ceiling on the odour turn, rad/s. Without it the gain above would spin
+     * her at ~4.7 rad/s (270 deg/s) on the strong cue at a plume's edge. This
+     * is ~143 deg/s -- brisk, and still well under a real fly's saccade.
+     */
+    odourTurnCap = 2.5,
+    /**
+     * Extra walking speed per unit of positive valence -- the fly hurries in an
+     * attractive plume. Real (flies surge in odour and slow when they lose it),
+     * engineered at the body for the same reason spontaneousSpeed is: measured,
+     * smell reaches DNp09 at 0.005 against vision's 0.428, so the connectome
+     * alone will not produce this. Valence runs ~0..0.6 near a source, so at
+     * this gain a strong plume roughly doubles her baseline walking speed.
+     */
+    odourSpeedGain = 1.5,
+    /**
+     * Below this much bilateral difference the antennae are not telling her
+     * anything useful, and only then does she fall back to blind casting.
+     */
+    castThreshold = 0.01,
     bounds = 38,
     seed = null,
   } = {}) {
@@ -135,6 +172,10 @@ export class LabAvatar {
     this.tethered = false;
     this.chemotaxisGain = chemotaxisGain;
     this.chemotaxisFloor = chemotaxisFloor;
+    this.odourTurnGain = odourTurnGain;
+    this.odourTurnCap = odourTurnCap;
+    this.odourSpeedGain = odourSpeedGain;
+    this.castThreshold = castThreshold;
     this.odourTurn = 0;
     this._castSign = 0;
 
@@ -167,7 +208,7 @@ export class LabAvatar {
     // Last sensed values, exposed for the HUD and for scenes.
     this.sensors = {
       left: 0, right: 0, loom: 0, loomL: 0, loomR: 0, touch: 0,
-      odour: 0, odourDelta: 0, valence: 0, wind: 0, scent: new Map(),
+      odour: 0, odourDelta: 0, odourLateral: 0, valence: 0, wind: 0, scent: new Map(),
     };
     this.motor = { steer: 0, forward: 0, escape: 0, feeding: 0 };
     this.escapeUntil = 0;
@@ -309,7 +350,21 @@ export class LabAvatar {
     if (this.touchDrive < 0.001) this.touchDrive = 0;
     this.sensors.touch = this.touchDrive;
 
-    this.olfaction.sample(scent, this.position);
+    // TWO ANTENNAE, not one nose. The brain still receives one symmetric drive
+    // per glomerulus (the male-cns ORN populations carry no left/right soma
+    // annotation at all, so there is no bilateral pathway in there to feed) --
+    // but the BODY now samples the field at each antenna and compares them,
+    // which is what gives smell a direction. That comparison happens at the
+    // body for exactly the reason the klinokinesis below does, and it is what
+    // real flies do: Drosophila lateralises odour across an antennal gap far
+    // smaller than this one.
+    //
+    // `right` is the fly's right-hand direction; see Arena.renderEyes, which
+    // states the same heading convention once for the eye cameras.
+    this.olfaction.sample(scent, this.position, {
+      x: -Math.cos(this.yaw),
+      z: Math.sin(this.yaw),
+    });
     this.olfaction.drive(brain);
     this.sensors.scent = this.olfaction.intensities;
 
@@ -334,16 +389,22 @@ export class LabAvatar {
       this.sensors.odour = best.intensity;
       this.sensors.odourDelta = delta;
       this.sensors.valence = valence;
-      if (Math.abs(valence) > this.chemotaxisFloor) {
-        // Falling gradient -> cast about; rising -> hold course. The sign is
-        // kept across ticks so a cast is a sustained arc, not a jitter.
-        if (delta < -1e-5) {
-          if (this._castSign === 0) this._castSign = Math.random() < 0.5 ? -1 : 1;
-          this.odourTurn = this._castSign * this.chemotaxisGain;
-        } else {
-          this._castSign = 0;
-          this.odourTurn = 0;
-        }
+      // Which way the smell is, rather than merely how much of it there is.
+      this.sensors.odourLateral = this.olfaction.lateral();
+
+      // Casting is now the FALLBACK, not the main event. With two antennae she
+      // can usually just aim at the source (act() steers on `odourLateral`), so
+      // a blind search is only the right answer when the gradient is getting
+      // WORSE and the antennae still cannot say which way to go. Before, this
+      // fired whenever the gradient dipped at all -- on a saturating field
+      // that means constantly, and every cast also switched the visual steering
+      // off, so she spent most of her time in a smell spinning at 109 deg/s
+      // with her eyes effectively disconnected.
+      const informative = Math.abs(this.sensors.odourLateral) >= this.castThreshold;
+      if (Math.abs(valence) > this.chemotaxisFloor && delta < -1e-5 && !informative) {
+        // The sign is kept across ticks so a cast is a sustained arc, not jitter.
+        if (this._castSign === 0) this._castSign = Math.random() < 0.5 ? -1 : 1;
+        this.odourTurn = this._castSign * this.chemotaxisGain;
       } else {
         this._castSign = 0;
         this.odourTurn = 0;
@@ -397,31 +458,45 @@ export class LabAvatar {
       this.velocity.set(0, 0, 0);
     } else if (escape > 0.35 && time > this.escapeUntil) {
       this.escapeUntil = time + 0.6;
-      // Escape is away from whichever side the loom came from.
-      const away = this.sensors.loomR > this.sensors.loomL ? -1 : 1;
+      // Escape is AWAY from whichever side the loom came from. Increasing yaw
+      // turns LEFT -- forward is (sin yaw, cos yaw) and right is
+      // (-cos yaw, sin yaw), so d(forward)/d(yaw) points along -right (the
+      // convention is stated in full in Arena.renderEyes). A threat on the
+      // RIGHT therefore has to ADD yaw. This used to read `loomR > loomL ?
+      // -1 : 1`, which is the opposite, and turned her straight into whatever
+      // was looming at her -- an escape reflex that ran toward the swatter.
+      const away = this.sensors.loomR > this.sensors.loomL ? 1 : -1;
       this.yaw += away * 1.1;
       this.speed = this.escapeImpulse;
-    } else if (this.chemotaxis && this.odourTurn !== 0) {
-      // Klinokinesis: turn when the odour gradient is FALLING, go straight when
-      // it is rising. This is how a real fly finds a smell it cannot localize
-      // -- and it cannot localize this one: the ORN populations in male-cns
-      // carry no left/right soma annotation at all (every one is '?'), so there
-      // is no bilateral comparison to read out of the connectome. The turn is
-      // therefore ENGINEERED at the body, not derived from the brain; what
-      // comes from the real neurons is the odour intensity driving it.
-      //
-      // Without it the fly walked past every station and into the wall: smell
-      // reached DNp09 (forward) but nothing steered, so a gradient could make
-      // it hurry, never aim.
-      this.yaw += this.odourTurn * dt;
-      const drive = this.spontaneousDrive(brain) + Math.max(0, forward) * this.speedGain;
-      this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     } else if (this.feeding) {
       // Feeding suppresses locomotion. Real DNp06 drive, engineered gate.
       this.speed += (0 - this.speed) * Math.min(1, dt * 6);
     } else {
-      this.yaw += steer * this.turnGain * dt;
-      const drive = this.spontaneousDrive(brain) + Math.max(0, forward) * this.speedGain;
+      // Vision and smell BOTH steer, and they add.
+      //
+      // They used to be mutually exclusive: a separate `else if (odourTurn)`
+      // branch sat above this one, so the instant she smelled anything on a
+      // falling gradient her eyes stopped contributing to steering entirely.
+      // Two senses that should cooperate took turns instead, and the odour one
+      // only ever contributed a blind random-sign cast. Summing them is both
+      // simpler and what an animal does -- the real DNa01 pair is downstream of
+      // everything at once, not of one modality at a time.
+      //
+      // `odourTurn` is the cast fallback and is normally 0; see sense().
+      let turn = steer * this.turnGain;
+      if (this.chemotaxis) {
+        const cap = this.odourTurnCap;
+        const smell = this.sensors.odourLateral * this.odourTurnGain;
+        turn += (smell < -cap ? -cap : smell > cap ? cap : smell) + this.odourTurn;
+      }
+      this.yaw += turn * dt;
+
+      // Hurry in a good smell. See odourSpeedGain -- this is the half of
+      // "speeds up near food, then stops to feed" that was missing; the
+      // stopping half is the `feeding` branch above.
+      const drive = this.spontaneousDrive(brain)
+        + Math.max(0, forward) * this.speedGain
+        + (this.chemotaxis ? Math.max(0, this.sensors.valence) * this.odourSpeedGain : 0);
       this.speed += (drive - this.speed) * Math.min(1, dt * 4);
     }
 

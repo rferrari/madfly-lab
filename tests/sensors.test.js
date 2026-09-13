@@ -15,6 +15,7 @@ import { OlfactoryReceptors, AVERSIVE_CHANNELS } from '../src/avatar/olfaction.j
 import { Station, Triggers } from '../src/core/station.js';
 import { FoodBowl } from '../src/stations/food-bowl.js';
 import { SlotMachine } from '../src/stations/slot-machine.js';
+import { LabAvatar } from '../src/avatar/lab-avatar.js';
 
 const W = 96;
 const H = 64;
@@ -179,6 +180,53 @@ describe('OlfactoryReceptors', () => {
     assert.ok(b.valence() < 0, `rot should read negative, got ${b.valence()}`);
   });
 
+  // The fly faces +Z, so its right-hand direction is (-1, 0) -- the convention
+  // is stated in full in Arena.renderEyes. A source out along +X is therefore
+  // on its LEFT, and `lateral()` is positive for "turn left", matching both
+  // `yaw` and LabBrain.readSteering.
+  const FACING_Z = { x: -1, z: 0 };
+
+  test('two antennae give smell a direction', () => {
+    const field = new ScentField();
+    field.emit('ORN_DM1', { position: new THREE.Vector3(0, 0, 0), radius: 12, strength: 1 });
+
+    const onTheLeft = new OlfactoryReceptors();
+    onTheLeft.sample(field, new THREE.Vector3(-6, 0, 0), FACING_Z);
+    assert.ok(onTheLeft.lateral() > 0, `source to the left should steer left, got ${onTheLeft.lateral()}`);
+
+    const onTheRight = new OlfactoryReceptors();
+    onTheRight.sample(field, new THREE.Vector3(6, 0, 0), FACING_Z);
+    assert.ok(onTheRight.lateral() < 0, `source to the right should steer right, got ${onTheRight.lateral()}`);
+
+    const deadAhead = new OlfactoryReceptors();
+    deadAhead.sample(field, new THREE.Vector3(0, 0, -6), FACING_Z);
+    assert.ok(Math.abs(deadAhead.lateral()) < 1e-9, 'a source dead ahead should not steer either way');
+  });
+
+  test('without a heading there is no direction to report', () => {
+    const field = new ScentField();
+    field.emit('ORN_DM1', { position: new THREE.Vector3(0, 0, 0), radius: 12, strength: 1 });
+    const orn = new OlfactoryReceptors();
+    orn.sample(field, new THREE.Vector3(-6, 0, 0)); // old single-point call
+    assert.equal(orn.lateral(), 0);
+  });
+
+  test('sugar one side and rot the other is a decision, not a dead zone', () => {
+    // valence() sums the two and they cancel exactly -- which is the bug this
+    // exists to avoid. Steering has to treat attractive and aversive channels
+    // separately or the fly gets no signal precisely where it must choose.
+    const field = new ScentField();
+    field.emit('ORN_DM1', { position: new THREE.Vector3(4, 0, 0), radius: 12, strength: 1 });
+    field.emit('ORN_V', { position: new THREE.Vector3(-4, 0, 0), radius: 12, strength: 1 });
+
+    const orn = new OlfactoryReceptors();
+    orn.sample(field, new THREE.Vector3(0, 0, 0), FACING_Z);
+
+    assert.ok(Math.abs(orn.valence()) < 1e-9, 'the blended scalar cancels to nothing here');
+    // +X is the fly's left, and that is where the sugar is.
+    assert.ok(orn.lateral() > 0.01, `should still steer toward the sugar, got ${orn.lateral()}`);
+  });
+
   test('reports gradient direction between samples', () => {
     const field = new ScentField();
     field.emit('ORN_DM1', { position: new THREE.Vector3(0, 0, 0), radius: 8, strength: 1 });
@@ -186,6 +234,92 @@ describe('OlfactoryReceptors', () => {
     orn.sample(field, new THREE.Vector3(5, 0, 0));
     orn.sample(field, new THREE.Vector3(2, 0, 0)); // moving closer
     assert.ok(orn.deltas.get('ORN_DM1') > 0, 'approaching the source read as a falling gradient');
+  });
+});
+
+describe('olfactory navigation', () => {
+  // A brain that contributes NOTHING: no steering, no forward drive, no
+  // feeding. Anything the fly manages here is the antennae and the body's own
+  // engineered chemotaxis, isolated from vision and from the connectome.
+  const muteBrain = {
+    setInput() {}, injectCurrent() {},
+    readSteering: () => 0,
+    readCalibrated: () => 0,
+    readPhasic: () => 0,
+    runtime: null,
+  };
+
+  /** Walk a fly for `seconds` and report how close it got to `target`. */
+  function walk({ emitters, start, yaw = 0, seconds = 40 }) {
+    const field = new ScentField();
+    for (const [channel, position] of emitters) {
+      field.emit(channel, { position, radius: 12, strength: 1 });
+    }
+    const fly = new LabAvatar({ position: start, yaw, vision: false, bounds: 20 });
+    const dt = 1 / 60;
+    let closest = Infinity;
+    let inPlume = 0; let inPlumeTicks = 0;
+    let outside = 0; let outsideTicks = 0;
+
+    for (let i = 0; i < Math.round(seconds / dt); i++) {
+      fly.sense(muteBrain, { scent: field, time: i * dt, visionFresh: false });
+      fly.act(muteBrain, dt, i * dt);
+      closest = Math.min(closest, fly.position.distanceTo(emitters[0][1]));
+      if (fly.sensors.valence > 0.05) { inPlume += fly.speed; inPlumeTicks++; }
+      else { outside += fly.speed; outsideTicks++; }
+    }
+    return {
+      closest,
+      speedInPlume: inPlume / Math.max(1, inPlumeTicks),
+      speedOutside: outside / Math.max(1, outsideTicks),
+    };
+  }
+
+  test('walks to a food source that is off to one side', () => {
+    const sugar = new THREE.Vector3(-8.6, 0.4, 5); // ~10 away, 60 deg to the left
+    const { closest } = walk({
+      emitters: [['ORN_DM1', sugar]], start: [0, 0.4, 0],
+    });
+    // Without bilateral antennae this was a random-sign cast that only found
+    // a source by luck; it has to actually arrive now.
+    assert.ok(closest < 2, `should reach the food, got no closer than ${closest.toFixed(2)}`);
+  });
+
+  test('chooses the sugar over the rot when both are in range', () => {
+    const sugar = new THREE.Vector3(-7, 0.4, 7);
+    const rot = new THREE.Vector3(7, 0.4, 7);
+    const { closest } = walk({
+      emitters: [['ORN_DM1', sugar], ['ORN_V', rot]], start: [0, 0.4, 0],
+    });
+    assert.ok(closest < 3, `should commit to the sugar, got no closer than ${closest.toFixed(2)}`);
+  });
+
+  test('hurries in an attractive plume', () => {
+    const sugar = new THREE.Vector3(0, 0.4, 10);
+    const { speedInPlume, speedOutside } = walk({
+      emitters: [['ORN_DM1', sugar]], start: [0, 0.4, 0],
+    });
+    assert.ok(speedInPlume > speedOutside,
+      `should walk faster in the smell (${speedInPlume.toFixed(2)}) than out of it `
+      + `(${speedOutside.toFixed(2)})`);
+  });
+
+  test('the escape turn goes AWAY from the loom, not into it', () => {
+    // Increasing yaw turns left (see Arena.renderEyes), so a threat on the
+    // RIGHT must raise yaw. This had the opposite sign and ran her into it.
+    const fly = new LabAvatar({ position: [0, 0.4, 0], yaw: 0, vision: false });
+    const scaredBrain = { ...muteBrain, readCalibrated: (c) => (c === 'DNp01' ? 1 : 0) };
+
+    fly.sensors.loomR = 1;
+    fly.sensors.loomL = 0;
+    fly.act(scaredBrain, 1 / 60, 1);
+    assert.ok(fly.yaw > 0, `threat on the right should turn left, yaw went to ${fly.yaw}`);
+
+    const other = new LabAvatar({ position: [0, 0.4, 0], yaw: 0, vision: false });
+    other.sensors.loomL = 1;
+    other.sensors.loomR = 0;
+    other.act(scaredBrain, 1 / 60, 1);
+    assert.ok(other.yaw < 0, `threat on the left should turn right, yaw went to ${other.yaw}`);
   });
 });
 
