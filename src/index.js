@@ -100,7 +100,7 @@ export { CIRCUITS } from './circuits.js';
 // Room 2 -- Tethered Training Rig. The room's scene builder + the generic
 // (task-agnostic) sense->settle->read->decide->act->learn loop and its
 // linear TD-learning readout. Task-specific content (blackjack, or whatever
-// else a scene trains on) is NOT exported here -- see examples/blackjack/.
+// else a scene trains on) is NOT exported here -- see experiences/blackjack/.
 export {
   buildTetheredRig, frameTetheredCamera,
   PLATFORM_POSITION, DOCK_POSITION, ORB_POSITION, TETHERED_BASE_POSITION,

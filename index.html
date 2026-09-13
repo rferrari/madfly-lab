@@ -7,67 +7,305 @@
     <style>
       html, body { margin: 0; height: 100%; background: #0b0614; overflow: hidden; }
       #app-canvas { display: block; width: 100vw; height: 100vh; }
-      #boot {
-        position: fixed; inset: 0; display: grid; place-items: center;
-        background: radial-gradient(ellipse at 50% 42%, #1a0f2e 0%, #0b0614 62%);
-        color: #e8e0f5; font: 13px 'SF Mono', ui-monospace, monospace;
-        letter-spacing: 0.1em; z-index: 20;
-        transition: opacity .45s ease;
+      #madfly-landing-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        background: rgba(11, 6, 20, 0.92) url('/public/madfly_lab_menu_bg.png') center/cover no-repeat;
+        backdrop-filter: blur(10px);
+        font-family: 'SF Mono', ui-monospace, monospace;
+        color: #f0e6d2;
+        overflow-y: auto;
+        padding: 40px 20px 60px 20px;
+        box-sizing: border-box;
       }
-      #boot.fading { opacity: 0; }
-      #boot.gone { display: none; }
-      #boot-inner { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-      #boot-art {
-        width: min(300px, 52vw); border-radius: 18px; display: block;
-        box-shadow: 0 0 70px rgba(154,92,255,.34), 0 0 22px rgba(0,229,255,.18);
-        animation: bootpulse 2.6s ease-in-out infinite;
+      .landing-container {
+        background: rgba(18, 10, 32, 0.88);
+        border: 1px solid rgba(0, 240, 255, 0.3);
+        box-shadow: 0 0 35px rgba(0, 240, 255, 0.15), inset 0 0 20px rgba(255, 0, 128, 0.08);
+        border-radius: 18px;
+        padding: 40px 48px;
+        max-width: 800px;
+        width: 100%;
+        text-align: left;
+        margin: auto;
       }
-      @keyframes bootpulse {
-        0%, 100% { transform: scale(1); filter: saturate(1); }
-        50%      { transform: scale(1.018); filter: saturate(1.12); }
+      .landing-header {
+        text-align: center;
+        margin-bottom: 28px;
       }
-      #boot-track {
-        width: min(300px, 52vw); height: 3px; border-radius: 2px;
-        background: rgba(154,92,255,.20); overflow: hidden;
+      .landing-avatar-wrapper {
+        margin: 0 auto 16px auto;
+        width: 130px;
+        height: 130px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-      #boot-fill {
-        height: 100%; width: 0%; border-radius: 2px;
-        background: linear-gradient(90deg, #9a5cff, #00e5ff);
-        box-shadow: 0 0 10px rgba(0,229,255,.6);
-        transition: width .3s cubic-bezier(.4,0,.2,1);
+      .landing-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        filter: drop-shadow(0 0 18px rgba(0, 240, 255, 0.5));
+        transition: transform 0.3s ease;
       }
-      #boot-status {
-        color: rgba(232,224,245,.6); font-size: 10.5px; letter-spacing: .14em;
-        min-height: 1.2em; text-align: center;
+      .landing-avatar-img:hover {
+        transform: scale(1.05);
+        filter: drop-shadow(0 0 25px rgba(0, 240, 255, 0.8));
       }
-      #boot-status b { color: #00e5ff; font-weight: 500; }
-      #log {
-        position: fixed; left: 16px; bottom: 16px; z-index: 15;
-        color: #e8e0f5; font: 11px 'SF Mono', ui-monospace, monospace;
-        background: rgba(18,10,34,.82); border: 1px solid rgba(154,92,255,.35);
-        border-radius: 6px; padding: 7px 11px; opacity: 0;
-        transition: opacity .35s ease; pointer-events: none;
+      .landing-logo {
+        font-size: 32px;
+        font-weight: bold;
+        letter-spacing: 0.25em;
+        color: #00f0ff;
+        text-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
+        margin-bottom: 12px;
       }
+      .landing-subtitle {
+        font-size: 15px;
+        margin-bottom: 18px;
+        opacity: 0.85;
+        line-height: 1.5;
+        color: #d1c4e9;
+      }
+      .landing-stats-bar {
+        font-size: 13px;
+        margin-bottom: 24px;
+        opacity: 0.75;
+        color: #ff0080;
+        letter-spacing: 0.05em;
+      }
+      .landing-stats-bar span {
+        margin: 0 6px;
+      }
+      .boot-container {
+        margin-bottom: 24px;
+      }
+      #boot-status-label {
+        font-size: 13px;
+        margin-bottom: 8px;
+        min-height: 1.2em;
+        text-align: center;
+        letter-spacing: 0.08em;
+        color: #00f0ff;
+      }
+      .boot-progress-track {
+        width: 100%;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      #boot-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #00f0ff, #ff0080);
+        transition: width 0.3s ease;
+      }
+      .btn-enter-lab {
+        display: block;
+        width: 100%;
+        padding: 16px;
+        background: rgba(0, 240, 255, 0.15);
+        border: 2px solid rgba(0, 240, 255, 0.4);
+        border-radius: 10px;
+        color: #f0e6d2;
+        font: 15px 'SF Mono', ui-monospace, monospace;
+        letter-spacing: 0.12em;
+        cursor: not-allowed;
+        transition: all 0.3s ease;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .btn-enter-lab:not(:disabled) {
+        background: #00f0ff;
+        color: #0b0614;
+        cursor: pointer;
+        box-shadow: 0 0 24px rgba(0, 240, 255, 0.5);
+        font-weight: bold;
+        border-color: #00f0ff;
+      }
+      .btn-enter-lab:not(:disabled):hover {
+        box-shadow: 0 0 36px rgba(0, 240, 255, 0.8);
+        transform: translateY(-2px);
+      }
+      
+      .landing-section {
+        margin-top: 36px;
+        padding-top: 28px;
+        border-top: 1px solid rgba(154, 92, 255, 0.25);
+      }
+      .landing-section h2 {
+        font-size: 18px;
+        color: #00f0ff;
+        letter-spacing: 0.15em;
+        margin-top: 0;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .landing-section p {
+        font-size: 14px;
+        line-height: 1.65;
+        color: #d1c4e9;
+        margin-bottom: 14px;
+      }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+        margin-top: 20px;
+      }
+      .feature-card {
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(0, 240, 255, 0.2);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .feature-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 15px;
+        color: #ff0080;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .feature-card p {
+        font-size: 13px;
+        line-height: 1.55;
+        margin: 0;
+        color: #c0b4d8;
+      }
+      
+      .bottom-cta {
+        margin-top: 36px;
+        padding-top: 28px;
+        border-top: 1px solid rgba(154, 92, 255, 0.25);
+        text-align: center;
+      }
+      .bottom-cta p {
+        font-size: 14px;
+        color: #d1c4e9;
+        margin-bottom: 20px;
+      }
+
+      /* Existing styles for keys and log */
       #keys {
-        position: fixed; left: 16px; top: 16px; z-index: 15;
-        color: rgba(232,224,245,.45); font: 10px 'SF Mono', ui-monospace, monospace;
-        line-height: 1.7; pointer-events: none;
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        z-index: 15;
+        color: rgba(232,224,245,.45);
+        font: 10px 'SF Mono', ui-monospace, monospace;
+        line-height: 1.7;
+        pointer-events: none;
       }
       #keys b { color: #00e5ff; font-weight: 500; }
-      #boot b { color: #00e5ff; font-weight: 500; }
-      @keyframes blink {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 1; }
+      #log {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        z-index: 15;
+        color: #e8e0f5;
+        font: 11px 'SF Mono', ui-monospace, monospace;
+        background: rgba(18,10,34,.82);
+        border: 1px solid rgba(154,92,255,.35);
+        border-radius: 6px;
+        padding: 7px 11px;
+        opacity: 0;
+        transition: opacity .35s ease;
+        pointer-events: none;
       }
     </style>
   </head>
   <body>
     <canvas id="app-canvas"></canvas>
-    <div id="boot">
-      <div id="boot-inner">
-        <img id="boot-art" src="/public/madfly.png" alt="MadFly Lab" />
-        <div id="boot-track"><div id="boot-fill"></div></div>
-        <div id="boot-status">ENTERING THE LAB…</div>
+    <div id="madfly-landing-screen">
+      <div class="landing-container">
+        <div class="landing-header">
+          <div class="landing-avatar-wrapper">
+            <img src="/public/madfly.png" alt="MadFly Avatar" class="landing-avatar-img" />
+          </div>
+          <div class="landing-logo">🪰 MADFLY LAB</div>
+          <div class="landing-subtitle">
+            3D Drosophila Connectome Sandbox & Embodied Intelligence Framework
+          </div>
+          <div class="landing-stats-bar">
+            <span><b>176,422</b> NEURONS</span> • 
+            <span><b>25.7M</b> SYNAPSES</span> • 
+            <span><b>Janelia MaleCNS v1.0</b></span>
+          </div>
+
+          <!-- Telemetry Boot Progress -->
+          <div class="boot-container">
+            <div id="boot-status-label">INITIALIZING NEURAL RUNTIME...</div>
+            <div class="boot-progress-track">
+              <div id="boot-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <button class="btn-enter-lab" disabled>CONNECTING NEUROMORPHIC ENGINE...</button>
+        </div>
+
+        <!-- Project Overview Section -->
+        <div class="landing-section">
+          <h2>🧠 ABOUT THE PROJECT</h2>
+          <p>
+            MadFly Lab is an open 3D simulation sandbox built on the real biological connectome of 
+            <i>Drosophila melanogaster</i>. Rather than driving an agent with engineered heuristics or artificial neural net approximations, 
+            MadFly Lab directly simulates the anatomical wiring, synaptic weights, and biophysical sensory loops 
+            mapped from HHMI Janelia's <b>MaleCNS v1.0</b> dataset.
+          </p>
+          <p>
+            The project connects high-resolution WebGL 3D physical environments with neuromorphic rate-model dynamics. 
+            Visual threats, olfactory plumes, and mechanosensory pokes propagate through real descending motor pathways, 
+            allowing researchers and developers to observe biological intelligence in action.
+          </p>
+        </div>
+
+        <!-- How It's Built Section -->
+        <div class="landing-section">
+          <h2>🛠️ HOW IT'S BUILT</h2>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h3>👁️ Bi-Splayed Eye & Looming Pipeline</h3>
+              <p>
+                Two 40° splayed eye cameras render compound retinas with LC4/LPLC2 motion-opponency looming detectors, 
+                directly driving the real Giant Fiber (DNp01) escape takeoff circuit.
+              </p>
+            </div>
+            <div class="feature-card">
+              <h3>👃 Olfactory Chemotaxis</h3>
+              <p>
+                Spatial 3D odor gradients stimulate real Odorant Receptor Neurons (ORN glomeruli DM1, VA6, CO2), 
+                steering locomotion via descending pathways (DNa01) and dopamine payout channels (PAM11).
+              </p>
+            </div>
+            <div class="feature-card">
+              <h3>⚡ Connectome Neural Runtimes</h3>
+              <p>
+                Calculates dynamic updates (\(a \leftarrow \tanh(W \cdot a + I)\)) across full sparse connectivity matrices on CPU/GPU (Mode A) 
+                or sub-second pruned behavioral subgraphs in-browser (Mode B).
+              </p>
+            </div>
+            <div class="feature-card">
+              <h3>🧪 Interactive Stations & Optogenetics</h3>
+              <p>
+                Features 9 interactive arena stations (hazard fans, toad tongue strikes, light switches), 
+                a 3D soma point-cloud optogenetics laser, and tethered reinforcement learning rigs.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom CTA -->
+        <div class="bottom-cta">
+          <p>Ready to observe biological neural circuits in an active sensorimotor loop?</p>
+          <button class="btn-enter-lab" disabled>CONNECTING NEUROMORPHIC ENGINE...</button>
+        </div>
       </div>
     </div>
     <div id="keys">
@@ -78,51 +316,60 @@
     </div>
     <div id="log"></div>
     <script type="module">
-      const boot = document.getElementById('boot');
-      const fill = document.getElementById('boot-fill');
-      const status = document.getElementById('boot-status');
-      const started = performance.now();
-
-      // Minimum time the splash stays up. Loading a pack off localhost is close
-      // to instantaneous, and a screen that flashes for 80ms reads as a glitch
-      // rather than as loading -- so hold it long enough to be seen.
-      const MIN_SPLASH_MS = 1000;
-
-      // Progress is reported by the lab as real milestones (see hello-lab.js);
-      // this only draws it. Unknown-duration steps still move, because a bar
-      // that sits still looks broken even when nothing is wrong.
       let shown = 0;
-      window.__madflyBoot = (pct, label) => {
-        shown = Math.max(shown, pct);
-        fill.style.width = `${shown}%`;
-        if (label) status.innerHTML = label;
+      const enterLab = () => {
+        const landing = document.getElementById('madfly-landing-screen');
+        if (landing) landing.style.display = 'none';
+        if (window.enterMadflyLab) {
+          window.enterMadflyLab();
+        } else if (window.lab) {
+          window.lab.resume();
+        }
       };
 
-      const creep = setInterval(() => {
-        if (shown < 88) window.__madflyBoot(shown + 1.5);
-      }, 260);
+      window.__madflyBoot = (pct, label) => {
+        shown = Math.max(shown, pct);
+        const fill = document.getElementById('boot-progress-fill');
+        const txt = document.getElementById('boot-status-label');
+        const buttons = document.querySelectorAll('.btn-enter-lab');
+        
+        if (fill) fill.style.width = `${shown}%`;
+        if (txt) txt.innerHTML = label;
+
+        if (pct >= 90) {
+          buttons.forEach((btn) => {
+            btn.disabled = false;
+            btn.textContent = 'ENTER MADFLY LAB';
+            btn.onclick = enterLab;
+          });
+        }
+      };
+
+      const MIN_SPLASH_MS = 1000;
+      const started = performance.now();
 
       const finish = async () => {
-        clearInterval(creep);
         window.__madflyBoot(100, 'READY');
         const held = performance.now() - started;
         if (held < MIN_SPLASH_MS) {
           await new Promise((r) => setTimeout(r, MIN_SPLASH_MS - held));
         }
-        boot.classList.add('fading');
-        setTimeout(() => boot.classList.add('gone'), 460);
       };
 
-      import('./examples/hello-lab.js')
+      import('./experiences/hello-lab.js')
         .then(finish)
         .catch((e) => {
-          clearInterval(creep);
-          fill.style.background = '#ff3355';
-          boot.innerHTML =
-            `<div style="max-width:62ch;line-height:1.8;padding:24px">FAILED: ${e.message}<br><br>
-             <span style="color:#9a5cff">If a pack is missing, build it:</span><br>
-             <code>cd python &amp;&amp; uv run python scripts/build_pack.py --all \
-             --cache-dir ../../fly_simulation/.cache --out-dir ../packs</code></div>`;
+          const txt = document.getElementById('boot-status-label');
+          const fill = document.getElementById('boot-progress-fill');
+          if (txt) {
+            txt.style.color = '#ff0055';
+            txt.style.fontWeight = 'bold';
+            txt.innerHTML = `⚠️ FAILED TO LOAD LAB: ${e.message || e}`;
+          }
+          if (fill) {
+            fill.style.background = '#ff0055';
+            fill.style.width = '100%';
+          }
           console.error(e);
         });
     </script>
