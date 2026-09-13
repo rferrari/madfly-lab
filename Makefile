@@ -133,7 +133,7 @@ stop:  ## stop any running brain and frontend
 	@#
 	@# `pkill -f <pattern>` is a trap here and it bit twice: the pattern appears
 	@# in the command line of whatever shell is running the recipe, so pkill
-	@# matches that shell. Excluding $$$$ only protects the CURRENT shell -- when
+	@# matches that shell. Exiting $$$$ only protects the CURRENT shell -- when
 	@# `start` invokes `stop` as a sub-make, the pattern is still in the START
 	@# recipe's command line, so `stop` killed its own caller and make reported
 	@# "Terminated" before doing anything.
@@ -141,16 +141,23 @@ stop:  ## stop any running brain and frontend
 	@# A shell never owns a listening socket, so resolving the port's owner
 	@# cannot match anything but the real server.
 	@pid=$$(ss -ltnp 2>/dev/null | grep ':$(BRAIN_PORT)' \
-	        | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
+		| grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
 	  if [ -n "$$pid" ]; then kill $$pid 2>/dev/null || true; \
 	    echo "  stopped the Mode A server (pid $$pid)"; fi
 	@pid=$$(ss -ltnp 2>/dev/null | grep ':$(PORT)' \
-	        | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
+		| grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
 	  if [ -n "$$pid" ]; then kill $$pid 2>/dev/null || true; \
 	    echo "  stopped the frontend (pid $$pid)"; fi
+	@# Kill frontend on known preview and dev ports
+	@for port in 5173 4173 3000; do \
+	  pid=$$(ss -ltnp 2>/dev/null | grep ":$$port" \
+		| grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2); \
+	  if [ -n "$$pid" ]; then kill $$pid 2>/dev/null || true; \
+	    echo "  stopped the frontend on port $$port (pid $$pid)"; \
+	  fi; \
+	 done
 	@rm -f $(BRAIN_PID)
 	@sleep 1
-
 # ---- checks ---------------------------------------------------------------
 
 test:  ## run the test suite
