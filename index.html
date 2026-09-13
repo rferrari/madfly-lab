@@ -34,16 +34,26 @@
         margin: auto;
       }
       .landing-header {
-        text-align: center;
         margin-bottom: 28px;
       }
+      .landing-header-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
       .landing-avatar-wrapper {
-        margin: 0 auto 16px auto;
         width: 130px;
         height: 130px;
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
+      }
+      .landing-header-info {
+        flex: 1;
+        text-align: right;
       }
       .landing-avatar-img {
         width: 100%;
@@ -73,13 +83,22 @@
       }
       .landing-stats-bar {
         font-size: 13px;
-        margin-bottom: 24px;
+        margin-bottom: 0;
         opacity: 0.75;
         color: #ff0080;
         letter-spacing: 0.05em;
       }
       .landing-stats-bar span {
         margin: 0 6px;
+      }
+      @media (max-width: 600px) {
+        .landing-header-main {
+          flex-direction: column;
+          align-items: center;
+        }
+        .landing-header-info {
+          text-align: center;
+        }
       }
       .boot-container {
         margin-bottom: 24px;
@@ -226,17 +245,21 @@
     <div id="madfly-landing-screen">
       <div class="landing-container">
         <div class="landing-header">
-          <div class="landing-avatar-wrapper">
-            <img src="/public/madfly.png" alt="MadFly Avatar" class="landing-avatar-img" />
-          </div>
-          <div class="landing-logo">🪰 MADFLY LAB</div>
-          <div class="landing-subtitle">
-            3D Drosophila Connectome Sandbox & Embodied Intelligence Framework
-          </div>
-          <div class="landing-stats-bar">
-            <span><b>176,422</b> NEURONS</span> • 
-            <span><b>25.7M</b> SYNAPSES</span> • 
-            <span><b>Janelia MaleCNS v1.0</b></span>
+          <div class="landing-header-main">
+            <div class="landing-avatar-wrapper">
+              <img src="/public/madfly.png" alt="MadFly Avatar" class="landing-avatar-img" />
+            </div>
+            <div class="landing-header-info">
+              <div class="landing-logo">MADFLY LAB</div>
+              <div class="landing-subtitle">
+                3D Drosophila Connectome Sandbox & Embodied Intelligence Framework
+              </div>
+              <div class="landing-stats-bar">
+                <span><b>176,422</b> NEURONS</span> • 
+                <span><b>25.7M</b> SYNAPSES</span> • 
+                <span><b>Janelia MaleCNS v1.0</b></span>
+              </div>
+            </div>
           </div>
 
           <!-- Telemetry Boot Progress -->
