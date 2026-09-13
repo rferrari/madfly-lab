@@ -39,10 +39,21 @@ export class Screen extends Station {
     this.onDraw = opts.onDraw ?? null;
     this.screenWidth = opts.screenWidth ?? 2.2;
     this.screenHeight = opts.screenHeight ?? 1.4;
-    // Panel CENTRE height. The fly's eye sits at y=0.75 with a ~30 degree
-    // vertical half-field, so anything centred much above ~1.5 leaves its view
-    // as it gets close -- the screen used to sit at 1.7 and disappeared upward
-    // exactly when it should have loomed largest.
+    // Panel CENTRE height, and it is a VISIBILITY constraint, not decoration.
+    //
+    // The fly's eye sits at EYE_HEIGHT = 0.35 (arena.js) with a 63 degree
+    // vertical field -- a half-field of ~31.7 degrees. A panel centred `m`
+    // above the eye sits at atan((m - 0.35) / d) degrees up, and that angle
+    // GROWS as she approaches, so mounting a screen high makes it climb out of
+    // her view exactly when it should be filling it. What she sees instead is
+    // whatever dark furniture is underneath.
+    //
+    // Measured, facing each station head-on at 6 / 3 / 1.8 units, mean frame
+    // brightness: this screen at mount 0.85 goes 0.036 -> 0.047 -> 0.074, and
+    // the Mate 0.029 -> 0.040 -> 0.076 -- both brighten as she closes in, which
+    // is what gives vision anything to steer on. The Workstation at mount 1.2
+    // went 0.0152 -> 0.0178 -> 0.0149: flat, and the dimmest thing in the room.
+    // Keep this at or below ~0.9 unless the panel is also small.
     this.mount = opts.mount ?? 0.85;
     this.views = 0;
     this.payouts = 0;

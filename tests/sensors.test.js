@@ -15,6 +15,7 @@ import { OlfactoryReceptors, AVERSIVE_CHANNELS } from '../src/avatar/olfaction.j
 import { Station, Triggers } from '../src/core/station.js';
 import { FoodBowl } from '../src/stations/food-bowl.js';
 import { SlotMachine } from '../src/stations/slot-machine.js';
+import { Workstation } from '../src/stations/workstation.js';
 import { LabAvatar } from '../src/avatar/lab-avatar.js';
 import { resolveGenotype, explainGenotype, explainChannel } from '../src/avatar/genotype.js';
 
@@ -417,6 +418,34 @@ describe('switching a station off', () => {
 
     bowl.setEnabled(false);
     assert.deepEqual(writes.at(-1), ['taste', 0], 'switching it off must end the meal');
+  });
+});
+
+describe('Workstation', () => {
+  test('the fly walking over the keyboard types', () => {
+    const ws = new Workstation({ text: '' });
+    ws.onBump();
+    assert.ok(ws.text.length > 0, 'trampling the keys should put characters on screen');
+  });
+
+  test('typing is throttled, not once per collision tick', () => {
+    // _resolveCollisions runs every brain tick (60Hz) for as long as she is
+    // touching it, so an unguarded handler typed thousands of chars a second.
+    const ws = new Workstation({ text: '' });
+    ws.onBump();
+    const afterFirst = ws.text.length;
+    for (let i = 0; i < 60; i++) ws.onBump(); // same `elapsed`, so same instant
+    assert.equal(ws.text.length, afterFirst, 'should not retype within the cooldown');
+
+    ws.elapsed = 5; // ...but time passing lets her type again
+    ws.onBump();
+    assert.ok(ws.text.length > afterFirst);
+  });
+
+  test('the screen buffer cannot grow without bound', () => {
+    const ws = new Workstation({ text: 'x'.repeat(500) });
+    ws.trample();
+    assert.ok(ws.text.length < 400, `buffer should be trimmed, got ${ws.text.length}`);
   });
 });
 

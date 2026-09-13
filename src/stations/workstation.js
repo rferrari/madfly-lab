@@ -13,14 +13,24 @@ import * as THREE from 'three';
 import { Screen } from './screen.js';
 import { THEME, CSS } from '../core/theme.js';
 
+/** Seconds between bursts of fly-typing. See `onBump`. */
+const TRAMPLE_COOLDOWN = 0.28;
+
 export class Workstation extends Screen {
   constructor(opts = {}) {
     super({
       name: 'Workstation', kickRadius: 2.4, collisionRadius: 1.1,
       label: 'WORKSTATION', sublabel: 'type — the fly sees the screen',
       labelColor: '#00e5ff',
-      screenWidth: 2.4, screenHeight: 1.5, blinkHz: 0,
-      mount: 1.2,  // Raise screen above the desk
+      screenWidth: 2.0, screenHeight: 1.25, blinkHz: 0,
+      // Was 1.2 ("raise the screen above the desk"), which put the display
+      // 0.85 above the fly's eye -- so it climbed past her 31.7 degree
+      // half-field as she approached and she arrived staring at the black
+      // desk. Measured, it was the only station in the room that did not get
+      // brighter as she walked at it. See Screen's `mount` note. 0.9 still
+      // clears the desk (top 0.12) and the keys (~0.25) with the panel's
+      // bottom edge at 0.275, so it reads as a monitor standing on the desk.
+      mount: 0.9,
       ...opts,
     });
     this.onKey = opts.onKey ?? null;
@@ -28,6 +38,7 @@ export class Workstation extends Screen {
     this.caret = true;
     this._caretT = 0;
     this._bound = false;
+    this._lastTrample = -Infinity;
   }
 
   build() {
@@ -77,10 +88,21 @@ export class Workstation extends Screen {
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.fillStyle = '#0b0614';
+    // A LIT panel, not a black rectangle with text on it. This used to fill
+    // with #0b0614 -- so dark that, measured head-on at 1.8 units, the whole
+    // workstation came back at 0.019 mean frame brightness against the plain
+    // Screen's 0.074. Vision steers her by comparing how bright each eye's view
+    // is (LPLC1/LPLC2 -> DNa01), so an unlit display gives her nothing to turn
+    // toward, and this is the only station whose pull on her is visual at all:
+    // it emits no scent.
+    const glow = ctx.createLinearGradient(0, 0, 0, h);
+    glow.addColorStop(0, '#123048');
+    glow.addColorStop(0.5, '#0d2236');
+    glow.addColorStop(1, '#0a1626');
+    ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(0, 229, 255, 0.25)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.55)';
+    ctx.lineWidth = 3;
     ctx.strokeRect(8, 8, w - 16, h - 16);
 
     ctx.fillStyle = CSS.cyan;
@@ -125,11 +147,46 @@ export class Workstation extends Screen {
       else return;
       e.preventDefault();
 
-      // Light a random key so typing is visible on the model too.
-      const key = this.keyMeshes?.[Math.floor(Math.random() * this.keyMeshes.length)];
-      if (key) key.material.emissiveIntensity = 1.6;
+      this._flashKey();
       this.onKey?.(e.key, this.text, this);
     });
+  }
+
+  /** Light one key up, so typing shows on the model and not just the screen. */
+  _flashKey() {
+    const key = this.keyMeshes?.[Math.floor(Math.random() * this.keyMeshes.length)];
+    if (key) key.material.emissiveIntensity = 1.6;
+  }
+
+  /**
+   * The fly walking across the keyboard types. Purely cosmetic -- but it is
+   * cosmetic that changes what she SEES, since the screen is a live canvas
+   * feeding her eyes, so a fly blundering over the keys makes the display
+   * flicker and change, which is real visual input on the real pathway.
+   */
+  trample() {
+    const glyphs = 'abcdefghijklmnopqrstuvwxyz0123456789 ./;[]-=';
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      this.text += glyphs[Math.floor(Math.random() * glyphs.length)];
+      this._flashKey();
+    }
+    // Keep the buffer from growing without bound over a long session; the
+    // renderer only shows the last six lines anyway.
+    if (this.text.length > 400) this.text = this.text.slice(-200);
+    this.onKey?.(null, this.text, this);
+    return this.text;
+  }
+
+  /**
+   * Bumping the desk is enough contact to mash a few keys. Throttled: collision
+   * resolution runs every brain tick (60Hz), so an unguarded version typed a
+   * few thousand characters per second of contact.
+   */
+  onBump() {
+    if (this.elapsed - this._lastTrample < TRAMPLE_COOLDOWN) return;
+    this._lastTrample = this.elapsed;
+    this.trample();
   }
 
   update(dt, ctx) {

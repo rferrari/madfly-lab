@@ -106,9 +106,13 @@ function buildRoom1() {
   }));
 
   // 6. Workstation -- type on it while the fly is nearby and it watches you.
+  // `onKey` fires for a human typing (while she is within kickRadius) AND for
+  // the fly walking over the keyboard herself -- `key` is null for the latter.
   lab.addStation(new Station.Workstation({
     text: 'hello fly\n',
-    onKey: Triggers.throttle(2, () => log('workstation: the fly is watching you type')),
+    onKey: Triggers.throttle(2, (key) => log(key === null
+      ? 'workstation: she walked across the keyboard'
+      : 'workstation: the fly is watching you type')),
   }));
 
   // 7. Mate -- the missing half of the courtship circuit. Nothing in the arena
