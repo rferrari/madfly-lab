@@ -486,6 +486,48 @@ describe('flight', () => {
     assert.equal(fly.verticalSpeed, 0);
   });
 
+  test('landing does not startle her back into the air', () => {
+    // The bounce loop this guards against was real. Landing used to drive the
+    // tactile startle channel, and measured against the live pack a
+    // landing-strength touch takes DNp01 from ~0.28 to 0.56 -- past the 0.35
+    // takeoff threshold -- so she relaunched on every touchdown, forever.
+    // Here the brain is held ALARMED the whole time, which is the worst case:
+    // she must still stay down for the refractory period.
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    fly.act(alarmed, 1 / 60, 1);
+    assert.ok(fly.flying, 'should have taken off');
+
+    // fly until she lands
+    const dt = 1 / 60;
+    let t = 1;
+    for (let i = 0; i < 60 * 8 && fly.flying; i++) { t += dt; fly.act(ground, dt, t); }
+    assert.equal(fly.flying, false, 'should have landed');
+
+    // now hammer her with a firing Giant Fiber, still inside the refractory
+    const landedAt = t;
+    let relaunched = false;
+    while (t < landedAt + fly.landingRefractory - 0.05) {
+      t += dt;
+      fly.act(alarmed, dt, t);
+      if (fly.flying) { relaunched = true; break; }
+    }
+    assert.equal(relaunched, false, 'must not relaunch during the landing refractory');
+
+    // ...and that it is a refractory period, not a permanent lockout
+    for (let i = 0; i < 30; i++) { t += dt; fly.act(alarmed, dt, t); }
+    assert.ok(fly.flying, 'a real threat after the refractory should still launch her');
+  });
+
+  test('landing drives no tactile startle', () => {
+    const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
+    fly.act(alarmed, 1 / 60, 1);
+    const dt = 1 / 60;
+    let t = 1;
+    for (let i = 0; i < 60 * 8 && fly.flying; i++) { t += dt; fly.act(ground, dt, t); }
+    assert.equal(fly.flying, false, 'should have landed');
+    assert.equal(fly._pendingTouch, 0, 'her own landing is not a startling event');
+  });
+
   test('walking never changes her altitude', () => {
     const fly = new LabAvatar({ position: [0, 0.4, 0], vision: false });
     run(fly, ground, 3);

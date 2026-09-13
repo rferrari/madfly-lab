@@ -141,6 +141,13 @@ export class LabAvatar {
     ceiling = 6.0,
     /** Resting height of the body above the floor. */
     groundY = 0.4,
+    /**
+     * Seconds after touchdown during which the Giant Fiber cannot fire again.
+     * Real: the GF pathway has a refractory period. Also load-bearing here --
+     * see the landing branch in act() for the measurement showing what happens
+     * without it.
+     */
+    landingRefractory = 1.2,
     /** Calibrated DNp06 above which the fly stops to feed. */
     /** Rise in DNp06 above its resting level that counts as "this is food". */
     feedThreshold = 0.12,
@@ -208,6 +215,7 @@ export class LabAvatar {
     this.flightSeconds = flightSeconds;
     this.ceiling = ceiling;
     this.groundY = groundY;
+    this.landingRefractory = landingRefractory;
     /** Airborne? See act(). */
     this.flying = false;
     /** Seconds of engineered wing motor left; 0 means she is falling. */
@@ -603,13 +611,31 @@ export class LabAvatar {
           this.verticalSpeed = Math.min(0, this.verticalSpeed);
         }
         if (this.position.y <= this.groundY) {
-          // Touchdown. Landing is a real tactile event, same cells as a bump.
           this.position.y = this.groundY;
           this.flying = false;
           this.flightDrive = 0;
           this.speed *= 0.5;
-          if (this.verticalSpeed < -2) this.touch(Math.min(1, -this.verticalSpeed / 6));
           this.verticalSpeed = 0;
+
+          // LANDING MUST NOT STARTLE HER, and this took a measurement to get
+          // right. Touchdown used to call `touch()`, on the reasoning that
+          // landing is a contact event like any other. It is -- but `touch`
+          // is the STARTLE channel, and measured against the live pack, a
+          // landing-strength touch(0.9) drives DNp01 from its 0.27-0.29
+          // resting level to 0.5588, well past the 0.35 takeoff threshold,
+          // and holds it there for about a second. So every landing fired the
+          // Giant Fiber and threw her straight back into the air: she took
+          // off, flew, landed, startled herself, and took off again, forever.
+          //
+          // A fly is not alarmed by its own feet arriving. Hitting something
+          // still drives tactile through the normal wall and station paths.
+          //
+          // The refractory is the belt to that braces: the real Giant Fiber
+          // has one, and it also covers the other way this loop can close --
+          // the floor genuinely does loom as she drops toward it, so the
+          // descent itself can push LC4 and re-trigger the escape even with
+          // no tactile drive at all.
+          this.escapeUntil = time + this.landingRefractory;
           this.onLand?.(this);
         }
       } else if (this.position.y !== this.groundY) {
