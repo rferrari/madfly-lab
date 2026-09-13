@@ -49,6 +49,22 @@ export class TrainingHUD {
     Object.assign(title.style, { color: CSS.violet, fontSize: '9px', letterSpacing: '0.14em', marginBottom: '6px' });
     panel.appendChild(title);
 
+    // A big, always-visible mode pill -- LEARNING vs FROZEN/PLAYING was
+    // previously only in the badge text below the graphs (small, easy to
+    // miss, and the one place it's genuinely ambiguous whether "success X%"
+    // means training or eval). This is the same `evaluating` flag, just
+    // impossible not to notice.
+    if (!document.getElementById('training-hud-pulse-style')) {
+      const style = document.createElement('style');
+      style.id = 'training-hud-pulse-style';
+      style.textContent = '@keyframes training-hud-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }';
+      document.head.appendChild(style);
+    }
+    this.stateEl = document.createElement('div');
+    this.stateEl.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:0.08em;'
+      + 'padding:5px 8px;border-radius:5px;margin-bottom:8px;text-align:center;';
+    panel.appendChild(this.stateEl);
+
     this.canvas = document.createElement('canvas');
     this.canvas.width = 274;
     this.canvas.height = 130;
@@ -171,6 +187,16 @@ export class TrainingHUD {
       ctx.fillText(label, w - 4, y0 + 10);
       ctx.textAlign = 'left';
     });
+
+    if (this.stateEl) {
+      const evaluating = !!this.badge.evaluating;
+      this.stateEl.textContent = evaluating ? '■ FROZEN — PLAYING LEARNED POLICY' : '● LEARNING';
+      this.stateEl.style.background = evaluating ? 'rgba(0, 229, 255, 0.16)' : 'rgba(154, 92, 255, 0.22)';
+      this.stateEl.style.color = evaluating ? CSS.cyan : CSS.violet;
+      // Only the LEARNING state pulses -- it's the one where something is
+      // actively changing every tick; frozen is, honestly, frozen.
+      this.stateEl.style.animation = evaluating ? 'none' : 'training-hud-pulse 1.6s ease-in-out infinite';
+    }
 
     if (this.badgeEl) {
       const b = this.badge;

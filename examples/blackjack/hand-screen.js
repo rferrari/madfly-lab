@@ -2,11 +2,14 @@
  * HandScreen -- a 2D DOM "monitor" for the blackjack task, stacked directly
  * above the TrainingHUD panel. Shows exactly the same content as the in-world
  * screen (examples/blackjack/card-table.js): current hand, the fly's action,
- * and the live Q-values. Deliberately a separate widget, not folded into
- * `TrainingHUD` itself -- that class is generic framework machinery (any
- * TrainingLoop task can use it), and "Player X / Dealer shows Y / HIT" is
- * blackjack vocabulary, so it belongs with the scene that knows the game,
- * same as card-table.js.
+ * and the live Q-values, plus a mode/accuracy banner (see `render`'s `meta`
+ * param) -- added because the training-vs-playing distinction was previously
+ * only in the smaller TrainingHUD panel below, easy to lose track of while
+ * watching this screen specifically. Deliberately a separate widget, not
+ * folded into `TrainingHUD` itself -- that class is generic framework
+ * machinery (any TrainingLoop task can use it), and "Player X / Dealer shows
+ * Y / HIT" is blackjack vocabulary, so it belongs with the scene that knows
+ * the game, same as card-table.js.
  */
 
 import { CSS } from '../../src/index.js';
@@ -26,7 +29,7 @@ export class HandScreen {
 
     this.canvas = document.createElement('canvas');
     this.canvas.width = 300;
-    this.canvas.height = 170;
+    this.canvas.height = 200;
     this.canvas.style.cssText = 'width:100%;display:block;border-radius:4px;';
     box.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
@@ -37,8 +40,14 @@ export class HandScreen {
     return this;
   }
 
-  /** Same drawing this task used to put on the in-world screen's canvas. */
-  render(state, action, decisionState, q) {
+  /**
+   * Same drawing this task used to put on the in-world screen's canvas, plus
+   * a mode/accuracy banner across the top.
+   * @param {{evaluating?:boolean, successRate?:number, trials?:number,
+   *   evalStats?:{trials:number,wins:number}}} [meta]  same shape TrainingHUD
+   *   .setBadge() takes -- pass the same object to both.
+   */
+  render(state, action, decisionState, q, meta = {}) {
     const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
@@ -48,23 +57,42 @@ export class HandScreen {
     ctx.lineWidth = 2;
     ctx.strokeRect(2, 2, w - 4, h - 4);
 
+    // Mode/accuracy banner -- which number below means "training" vs
+    // "playing" is exactly the ambiguity this is here to remove, so it says
+    // so directly rather than assuming the viewer is also watching
+    // TrainingHUD's smaller badge text at the same moment.
+    const evaluating = !!meta.evaluating;
+    const bannerH = 26;
+    ctx.fillStyle = evaluating ? 'rgba(0, 229, 255, 0.16)' : 'rgba(154, 92, 255, 0.18)';
+    ctx.fillRect(2, 2, w - 4, bannerH);
+    ctx.fillStyle = evaluating ? CSS.cyan : CSS.violet;
+    ctx.font = `700 13px ${CSS.font}`;
+    ctx.textAlign = 'center';
+    if (evaluating) {
+      const n = meta.evalStats?.trials ?? 0;
+      const pct = n ? ((meta.evalStats.wins / n) * 100).toFixed(1) : '0.0';
+      ctx.fillText(`▶ PLAYING · ${pct}% (${n} hands)`, w / 2, bannerH / 2 + 5);
+    } else {
+      const pct = ((meta.successRate ?? 0) * 100).toFixed(1);
+      ctx.fillText(`● LEARNING · ${pct}% (${meta.trials ?? 0} hands)`, w / 2, bannerH / 2 + 5);
+    }
+
     ctx.fillStyle = CSS.cyan;
     ctx.font = `600 20px ${CSS.font}`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`Player ${state.playerTotal}${state.usableAce ? ' (soft)' : ''}`, w / 2, 34);
+    ctx.fillText(`Player ${state.playerTotal}${state.usableAce ? ' (soft)' : ''}`, w / 2, bannerH + 30);
     ctx.fillStyle = CSS.dim;
     ctx.font = `13px ${CSS.font}`;
-    ctx.fillText(`Dealer shows ${state.dealerUpcard}`, w / 2, 54);
+    ctx.fillText(`Dealer shows ${state.dealerUpcard}`, w / 2, bannerH + 50);
 
     if (action) {
       ctx.fillStyle = action === 'hit' ? CSS.lime : CSS.amber;
       ctx.font = `700 28px ${CSS.font}`;
-      ctx.fillText(action.toUpperCase(), w / 2, 96);
+      ctx.fillText(action.toUpperCase(), w / 2, bannerH + 92);
     }
 
     ctx.font = `11px ${CSS.font}`;
     ctx.fillStyle = CSS.dim;
-    ctx.fillText(`Q(hit) ${(q.hit ?? 0).toFixed(3)}   Q(stand) ${(q.stand ?? 0).toFixed(3)}`, w / 2, 122);
+    ctx.fillText(`Q(hit) ${(q.hit ?? 0).toFixed(3)}   Q(stand) ${(q.stand ?? 0).toFixed(3)}`, w / 2, bannerH + 118);
 
     ctx.font = `10px ${CSS.font}`;
     ctx.fillStyle = CSS.violet;

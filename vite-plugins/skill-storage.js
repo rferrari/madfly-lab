@@ -43,12 +43,18 @@ export function skillStorage() {
   return {
     name: 'madfly-skill-storage',
     configureServer(server) {
-      fs.mkdirSync(SKILLS_DIR, { recursive: true });
-
       server.middlewares.use(async (req, res, next) => {
         if (!req.url.startsWith('/api/skills')) return next();
 
         try {
+          // Re-checked on every request, not just once at server startup:
+          // the directory holds nothing but generated artifacts, so it's
+          // easy to delete by hand (or clean up) while the dev server keeps
+          // running -- the next save/list/load after that would otherwise
+          // 500 on a missing directory instead of just quietly recreating
+          // it, which is what actually happened once already.
+          fs.mkdirSync(SKILLS_DIR, { recursive: true });
+
           const url = new URL(req.url, 'http://localhost');
 
           if (req.method === 'POST' && url.pathname === '/api/skills') {

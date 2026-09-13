@@ -149,7 +149,12 @@ export class LabObserver {
     recTitle.appendChild(this.recordingIndicator);
 
     const recButtonsDiv = document.createElement('div');
-    recButtonsDiv.style.cssText = 'display:flex;flex-direction:row;gap:4px;flex-wrap:wrap;';
+    // pointer-events:auto -- the HUD root is pointer-events:none (so it
+    // doesn't block clicks/drags on the 3D canvas underneath), so any panel
+    // with real controls has to opt back in itself, same as the soma-cloud
+    // view/zoom buttons above. Without this these buttons render but every
+    // click passes straight through to the canvas.
+    recButtonsDiv.style.cssText = 'display:flex;flex-direction:row;gap:4px;flex-wrap:wrap;pointer-events:auto;';
 
     const mkRecBtn = (text, title, onClick, bgColor = CSS.panel) => {
       const btn = document.createElement('button');

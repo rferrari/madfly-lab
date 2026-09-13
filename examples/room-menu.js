@@ -100,7 +100,7 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
       : 'Room 2: tethered rig — blackjack via ORN_DM1/VA6/DA1');
   });
 
-  mkBtn('🧠 Room 2 — Optogenetics Lab', 'Stationary. Click/hold the floating brain to stimulate real populations.', () => {
+  mkBtn('🧠 Room 3 — Optogenetics Lab', 'Stationary. Click/hold the floating brain to stimulate real populations.', () => {
     leaveRoom2Tasks();
     optogenetics = mountOptogenetics(lab);
     onLog('Room 2: tethered rig — optogenetics palette');

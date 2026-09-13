@@ -301,33 +301,29 @@ export class MadFlyLab {
     if (!status) {
       status = document.createElement('div');
       status.id = 'recording-status';
+      // top-center, not top-right -- top-right is the MADFLY LAB panel's own
+      // corner (src/observer/lab-observer.js mounts its root at top:0;
+      // right:0), so this toast used to sit directly on top of it.
       status.style.cssText = `
-        position: fixed; top: 16px; right: 16px; z-index: 20;
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20;
         background: rgba(18, 10, 34, 0.9); border: 2px solid rgba(154, 92, 255, 0.6);
         color: #00e5ff; font: 11px 'SF Mono', ui-monospace, monospace;
         padding: 10px 16px; border-radius: 6px; pointer-events: none;
-        animation: pulse 0.5s ease;
+        opacity: 0; transition: opacity 0.4s ease;
       `;
       document.body.appendChild(status);
-      // Add animation
-      if (!document.getElementById('recording-pulse-style')) {
-        const style = document.createElement('style');
-        style.id = 'recording-pulse-style';
-        style.textContent = `
-          @keyframes pulse {
-            0% { transform: scale(0.95); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-          }
-        `;
-        document.head.appendChild(style);
-      }
     }
     status.textContent = message;
-    status.style.animation = 'none';
-    setTimeout(() => {
-      status.style.animation = 'pulse 0.5s ease';
-    }, 10);
+    clearTimeout(this._recordingStatusTimer);
+    // Force the opacity transition to actually replay even if this message
+    // arrives while a previous one is still fading in/out.
+    status.style.opacity = '0';
+    requestAnimationFrame(() => { status.style.opacity = '1'; });
+    // Auto-fade -- this never used to happen at all, so a "STOPPED · N
+    // frames" toast from a while ago just sat there permanently.
+    this._recordingStatusTimer = setTimeout(() => {
+      status.style.opacity = '0';
+    }, 2800);
   }
 
   dispose() {

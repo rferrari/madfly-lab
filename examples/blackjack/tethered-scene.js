@@ -184,22 +184,25 @@ export function enterBlackjack(lab, opts = {}) {
 
   function finishAndRedraw(action) {
     const q = loop.q.qValues(loop.readFeatures());
+    // Same {evaluating, successRate, trials, evalStats} shape both widgets
+    // read -- one source of truth for "is this training or playing," so the
+    // two can't quietly disagree.
+    const meta = {
+      trials: loop.q.trials,
+      successRate: loop.q.successRate,
+      wins: loop.q.wins,
+      losses: loop.q.losses,
+      evaluating: loop.evaluating,
+      evalStats: loop.evalStats,
+    };
     table._render(task.state(), action, loop.decisionState, q);
-    handScreen.render(task.state(), action, loop.decisionState, q);
+    handScreen.render(task.state(), action, loop.decisionState, q, meta);
     hud.sample({
       pam11: lab.brain.readCalibrated('PAM11'),
       ppl1: lab.brain.readCalibrated('PPL1'),
       qHit: q.hit, qStand: q.stand,
     });
-    hud.setBadge({
-      trials: loop.q.trials,
-      successRate: loop.q.successRate,
-      decisionState: loop.decisionState,
-      wins: loop.q.wins,
-      losses: loop.q.losses,
-      evaluating: loop.evaluating,
-      evalStats: loop.evalStats,
-    });
+    hud.setBadge({ ...meta, decisionState: loop.decisionState });
     hud.update();
   }
 
