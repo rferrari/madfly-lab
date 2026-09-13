@@ -1,22 +1,38 @@
 <div align="center">
 
-<img src="madfly.png" alt="MadFly Lab" width="360">
+<img src="./packs/madfly.png" alt="MadFly Lab" width="360">
 
 # 🪰 MadFly Lab
 
 **An unhinged 3D connectome sandbox for building mad insect brain experiences.**
 
-`npm i` · `npm run pack` · `npm run dev`
+A framework for experimenting with the real fruit fly brain — **176,422 neurons, 25.7 million synapses** — without rebuilding the infrastructure every time. Drop 3D stations into a lab, hook them to real neurons, and spend your time on the experience, not the scaffolding.
+
+Built on the **MaleCNS v1.0** connectome (CC BY 4.0 — FlyEM/HHMI Janelia, Cambridge, MRC Lab). Every neuron, weight, and soma coordinate is real published data.
 
 </div>
 
 ---
 
+## 📋 Contents
+
+- [What You Build](#what-you-build)
+- [What You Get](#what-you-get)
+- [Two Runtimes, One API](#two-runtimes-one-api)
+- [Stations](#stations)
+- [Circuits](#circuits)
+- [Room 2: Tethered Training Rig](#room-2--tethered-training-rig)
+- [What Is Real, What Is Not](#what-is-real-and-what-is-not)
+- [Setup & Installation](#setup--installation)
+- [Acknowledgments](#acknowledgments)
+
+---
+
+## What You Build
+
 Drosophila connectomics projects keep rebuilding the same scaffolding — a WebGL
 viewport, a camera rig, a compound retina, a brain visualizer — before anyone
-gets to the interesting part. MadFly Lab decouples **infrastructure and brain
-diagnostics** from **experience logic**. You drop 3D stations into a lab, hook
-them to real neurons, and spend your time on the experience.
+gets to the interesting part. MadFly Lab **decouples infrastructure and diagnostics from experience logic**.
 
 ```javascript
 import { MadFlyLab, Station } from 'mad-fly-lab';
