@@ -12,8 +12,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only needed to FETCH a connectome from NeuPrint. Building packs from an
-# existing .npz cache (the normal path) does not require this.
+# Only needed to FETCH a connectome from NeuPrint -- building packs from an
+# existing .npz cache never touches it. Kept as an "optional" extra so that
+# path stays dependency-free, but `make setup` installs it by default (see
+# the Makefile's setup-python target): a fresh clone has no cache to fall
+# back on, so fetching is the normal path there, not the edge case.
 neuprint = ["neuprint-python>=0.4.26"]
 
 # GPU acceleration for the Mode A runtime (device="auto"/"gpu").

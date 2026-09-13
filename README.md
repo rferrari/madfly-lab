@@ -192,26 +192,44 @@ shipping a channel that silently does nothing.
 ## Quick start
 
 ```bash
-make setup                       # node + python deps
-make packs CACHE=/path/to/.cache # build packs from the real connectome
-make start                       # ← the one you want: full brain + the lab
+make setup    # node + python deps
+make packs    # build packs from the real connectome
+make start    # ← the one you want: full brain + the lab
 ```
+
+`packs` needs the real connectome (176,422 neurons) once. It is **not**
+committed to this repo — pick whichever of these you have:
+
+- **A NeuPrint token, nothing else.** Copy `.env.example` to `.env`, fill in
+  `NEUPRINT_TOKEN` ([get one here](https://neuprint.janelia.org), Account >
+  Auth Token). The first `make packs` fetches the full connectome live and
+  caches it to `./.cache/` — several minutes, once. Every run after reuses
+  that cache and skips the network entirely.
+- **An existing cache** (a sibling project, a teammate, an earlier run of your
+  own): `make packs CACHE=/path/to/that/.cache` — used as-is, no fetch, no
+  token needed.
+- **Neither**: `make packs` still runs, but falls back to a mock graph and
+  says so loudly. Enough to exercise the pipeline; not real data, and pack
+  builds will fail past that point (the mock graph doesn't have the real cell
+  types a circuit asks for — that failure is deliberate, not a bug).
 
 `make start` brings up the Mode A server (all 176,422 neurons, GPU if you have
 one), **waits for it to finish loading**, then opens the lab wired to it. That
 wait matters: the frontend gives a Mode A server only a few seconds before
-falling back to an in-tab pack, and the full connectome needs ~60–90s to load.
+falling back to an in-tab pack, and the full connectome needs ~60–90s to load
+from a warm cache (longer the very first time, if it's fetching live).
 
 ```bash
 make dev        # just the frontend (in-tab pruned pack, instant)
 make brain      # just the Mode A server
 make setup-gpu  # optional: CUDA, worth 16.7x on the full connectome
-make test       # 43 tests against real packs
+make test       # tests against real packs
 make            # list every target
 ```
 
-`make` on its own lists every target. `CACHE` points at the directory holding
-`connectome_<dataset>_full.npz` (~80MB); it is not in this repo.
+`make` on its own lists every target. `CACHE` (default: repo-local `.cache`,
+gitignored) points at the directory holding `connectome_<dataset>_full.npz`
+(~80MB) — override it to point at an existing one instead of fetching.
 
 ### Controls
 

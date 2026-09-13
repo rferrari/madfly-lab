@@ -43,7 +43,9 @@ import numpy as np
 from madfly_lab import calibrate, circuits
 from madfly_lab.device import select as select_device
 from madfly_lab.brain import LabBrainRuntime
-from madfly_lab.connectome import _normalize_weight_matrix, is_normalized, load_or_build_connectome
+from madfly_lab.connectome import (
+    _normalize_weight_matrix, is_normalized, load_or_build_connectome, neuprint_env,
+)
 
 DEFAULT_TICK_HZ = 60.0
 
@@ -237,9 +239,17 @@ async def _handle(ws, shared):
 
 def build_shared(cache_dir: str, dataset: str, circuit_name: str,
                  device: str = "auto") -> dict:
-    print(f"Loading FULL connectome ({dataset}) from {cache_dir} ...")
+    token, host = neuprint_env()
+    print(f"Loading FULL connectome ({dataset}) from {cache_dir} ..."
+          if token or os.path.exists(cache_dir)
+          # No cache and no token: this is about to fall straight to the mock
+          # graph, and that is easy to miss in a scrollback full of loading
+          # messages -- say so up front, not just in the loud warning that
+          # comes out of load_or_build_connectome after the fact.
+          else "No connectome cache and no NEUPRINT_TOKEN (checked .env and "
+               "the shell environment) -- falling back to the mock graph.")
     c = load_or_build_connectome(
-        token=os.environ.get("NEUPRINT_TOKEN"),
+        token=token, host=host,
         dataset=dataset, cache_dir=cache_dir, scope="full",
     )
     print(f"  {c.n_sm} neurons, {c.sm_adjacency.nnz} edges, source={c.source!r}")

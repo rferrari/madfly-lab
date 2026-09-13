@@ -60,6 +60,37 @@ except ImportError:
     print("Note: neuprint-python not installed -- cached connectomes still load; "
           "only live NeuPrint fetches are unavailable.")
 
+# madfly-lab: NEUPRINT_TOKEN / NEUPRINT_HOST from .env, for every caller.
+#
+# Every entry point that can fetch from NeuPrint (build_pack.py, server.py)
+# read `os.environ.get("NEUPRINT_TOKEN")` directly, which only ever sees a
+# value if something has already loaded .env into the process environment --
+# and nothing did. .env.example told a new dev to "copy this file to .env and
+# fill in real values", and that value then went nowhere: NEUPRINT_TOKEN
+# stayed unset regardless of what was in .env, silently, and every run fell
+# through to the mock graph. `python-dotenv` was already a declared dependency
+# for exactly this and simply was never called.
+#
+# Loaded once here, at import time of the one module every entry point already
+# imports for `load_or_build_connectome`, rather than duplicated in each script.
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv(usecwd=True))
+except ImportError:
+    pass  # python-dotenv not installed -- os.environ (already set) still works
+
+
+def neuprint_env() -> tuple[str | None, str]:
+    """(token, host) from the environment, after .env has been loaded above.
+
+    `NEUPRINT_HOST` was documented in .env.example from the start but never
+    actually read anywhere -- every caller hardcoded the public
+    neuprint.janelia.org default. Fixed here so setting it in .env (for a
+    self-hosted or mirrored NeuPrint instance) does something.
+    """
+    return os.environ.get("NEUPRINT_TOKEN"), os.environ.get("NEUPRINT_HOST", "neuprint.janelia.org")
+
+
 SENSORIMOTOR_TYPES = ["LPLC1", "LPLC2", "CT1", "DNp03"]
 MOTOR_TYPE = "DNp03"  # a real, strongly visually-connected descending neuron.
 # NOTE: the original project used DNg13 for this role, assumed from general

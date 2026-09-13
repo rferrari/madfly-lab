@@ -10,11 +10,16 @@
 #   make all-in     rebuild packs first, then start
 #
 # CACHE points at the directory holding connectome_<dataset>_full.npz (~80MB).
-# It is not in this repo -- override it if yours lives elsewhere:
+# It is not in this repo. Defaults to a repo-local ./.cache (gitignored):
+#   - not there yet, no token   -> falls back to the mock graph, loudly
+#   - not there yet, has a token (set NEUPRINT_TOKEN in .env)
+#                               -> fetches from NeuPrint, several minutes,
+#                                  once -- then it IS there for every run after
+#   - already there (yours, or a sibling project's) -> used as-is, no fetch
 #
-#   make packs CACHE=/somewhere/else/.cache
+#   make packs CACHE=/somewhere/else/.cache   # e.g. a sibling project's cache
 
-CACHE   ?= ../fly_simulation/.cache
+CACHE   ?= .cache
 CIRCUIT ?= courtship
 PORT    ?= 8330
 DEVICE  ?= auto
@@ -49,7 +54,15 @@ setup-node:
 	npm install
 
 setup-python:
-	cd python && uv venv && uv pip install -e .
+	@# The `neuprint` extra used to be left out of the base install on the
+	@# assumption that most people building packs already had a cache from a
+	@# sibling project and would never hit a live fetch. That assumption does
+	@# not hold for a fresh clone with nothing else on disk: NEUPRINT_TOKEN in
+	@# .env would appear to do nothing, silently falling back to the mock
+	@# graph, because neuprint-python itself was never installed to act on it.
+	@# It is one lightweight package (unlike setup-gpu's CUDA wheels), so it is
+	@# in the default install now.
+	cd python && uv venv && uv pip install -e ".[neuprint]"
 
 setup-gpu:  ## add CUDA support for the Mode A server (optional, ~2GB)
 	cd python && uv pip install -e ".[gpu]"
@@ -58,10 +71,13 @@ setup-gpu:  ## add CUDA support for the Mode A server (optional, ~2GB)
 # ---- data -----------------------------------------------------------------
 
 packs:  ## build all browser packs from the real connectome
-	@test -d "$(CACHE)" || { \
-	  echo "CACHE not found: $(CACHE)"; \
-	  echo "Point it at the directory holding connectome_<dataset>_full.npz:"; \
-	  echo "  make packs CACHE=/path/to/.cache"; exit 1; }
+	@# No hard failure on a missing CACHE dir: build_pack.py (via
+	@# connectome.py's load_or_build_connectome) already handles that itself --
+	@# fetch from NeuPrint if NEUPRINT_TOKEN is set (in .env or the shell),
+	@# else fall back to the mock graph and say so loudly. This target used to
+	@# refuse to run at all without a pre-existing cache dir, which is exactly
+	@# backwards for a fresh clone: it blocked the one path that makes a
+	@# from-scratch release actually work.
 	cd python && $(abspath $(PY)) scripts/build_pack.py --all \
 	  --cache-dir "$(abspath $(CACHE))" --out-dir ../packs
 
@@ -97,9 +113,13 @@ start:  ## the whole lab: full-connectome brain + frontend, one command
 	  echo "Mode A server already running on :$(BRAIN_PORT) -- reusing it."; \
 	  started=0; \
 	else \
-	  test -d "$(CACHE)" || { \
-	    echo "CACHE not found: $(CACHE)"; \
-	    echo "  make start CACHE=/path/to/.cache"; exit 1; }; \
+	  if [ ! -d "$(CACHE)" ]; then \
+	    echo "No cache at $(CACHE) yet -- server.py will fetch from NeuPrint if"; \
+	    echo "NEUPRINT_TOKEN is set (.env or shell), else fall back to the mock"; \
+	    echo "graph. A first-time fetch can run past this target's $(BRAIN_WAIT)x2s"; \
+	    echo "wait; it keeps running in the background and caches for next time"; \
+	    echo "even if this command falls through to the in-tab pack below."; \
+	  fi; \
 	  echo "Starting the full connectome (log: $(BRAIN_LOG))"; \
 	  ( cd python && nohup $(abspath $(PY)) -u -m madfly_lab.server \
 	      --cache-dir "$(abspath $(CACHE))" --circuit $(CIRCUIT) --device $(DEVICE) \

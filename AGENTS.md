@@ -156,13 +156,19 @@ Packs are **not committed** — they are multi-megabyte binaries rebuilt from th
 real connectome:
 
 ```bash
-cd python
-uv run python scripts/build_pack.py --all --cache-dir /path/to/connectome-cache
+make packs                              # CACHE defaults to repo-local ./.cache
+cd python && uv run python scripts/build_pack.py --all --cache-dir /path/to/connectome-cache
 ```
 
-The `--cache-dir` points at the ~80MB full-connectome `.npz`, which also is not
-committed. Any sibling project in this repo family has one; otherwise set
-`NEUPRINT_TOKEN` and let `connectome.py` fetch it (slow — minutes).
+The `--cache-dir` (`CACHE=` for `make`) points at the ~80MB full-connectome
+`.npz`, which also is not committed. Point it at an existing one (a sibling
+project in this repo family, a teammate's) and it is used as-is, no fetch. With
+nothing there yet, `connectome.py` fetches it live from NeuPrint instead, given
+`NEUPRINT_TOKEN` — read from `.env` (see `.env.example`) or the shell
+environment, loaded once by `connectome.py` itself via `python-dotenv`. Slow —
+several minutes — and one-time; it caches to that directory for every run
+after. No token and no cache: a loud mock-graph fallback, real enough to
+exercise the pipeline, not real data.
 
 ### Adding a circuit
 

@@ -4,10 +4,12 @@
     uv run python scripts/build_pack.py --all --cache-dir /path/to/connectome-cache
 
 Reads the full male-cns:v1.0 cache (176,422 neurons / 25.7M edges). That cache
-is ~80MB and is NOT vendored into this repo -- point --cache-dir at an existing
-one from a sibling project, or let connectome.py fetch it from NeuPrint with a
-token (slow, minutes). With neither, it falls back to the mock graph and says so
-loudly, which is enough to exercise the pipeline but is not real data.
+is ~80MB and is NOT vendored into this repo. If --cache-dir doesn't hold it yet,
+this fetches it live from NeuPrint using NEUPRINT_TOKEN (from .env, or your
+shell environment) and writes it there for next time -- slow, several minutes,
+one-time. Point --cache-dir at an existing cache (yours or a sibling project's)
+to skip that. With no cache and no token, falls back to the mock graph and says
+so loudly: structurally valid for exercising the pipeline, not real data.
 """
 
 import argparse
@@ -15,7 +17,7 @@ import os
 import sys
 
 from madfly_lab import calibrate, circuits
-from madfly_lab.connectome import load_or_build_connectome
+from madfly_lab.connectome import load_or_build_connectome, neuprint_env, _cache_path
 from madfly_lab.pack import write_pack
 from madfly_lab.prune import normalized_adjacency, prune_for_circuit
 
@@ -77,9 +79,17 @@ def main() -> int:
     for n in names:
         circuits.get(n)  # fail fast on a typo, before the slow load
 
-    print(f"Loading full connectome from {args.cache_dir} ...")
+    token, host = neuprint_env()
+    if not os.path.exists(_cache_path(args.dataset, args.cache_dir, scope="full")):
+        print(f"No cache at {args.cache_dir} -- "
+              + (f"fetching from NeuPrint ({host}); this takes several minutes the first time..."
+                 if token else "no NEUPRINT_TOKEN set (checked .env and the environment); "
+                 "will fall back to the mock graph."))
+    else:
+        print(f"Loading full connectome from {args.cache_dir} ...")
     c = load_or_build_connectome(
-        token=os.environ.get("NEUPRINT_TOKEN"),
+        token=token,
+        host=host,
         dataset=args.dataset,
         cache_dir=args.cache_dir,
         scope="full",
@@ -88,7 +98,8 @@ def main() -> int:
     if c.source == "mock":
         print("\n!! This is the MOCK graph, not real connectivity. Packs built from it\n"
               "!! are structurally valid and useless scientifically. Point --cache-dir\n"
-              "!! at a real full-connectome cache, or set NEUPRINT_TOKEN.\n", file=sys.stderr)
+              "!! at a real full-connectome cache, or set NEUPRINT_TOKEN (in .env or\n"
+              "!! your shell environment).\n", file=sys.stderr)
 
     for n in names:
         build_one(c, n, args.out_dir)
