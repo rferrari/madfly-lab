@@ -25,10 +25,12 @@
 import { CSS, GENOTYPES, CIRCUITS } from '../src/index.js';
 import { enterBlackjack } from './blackjack/tethered-scene.js';
 import { mountOptogenetics } from './optogenetics/optogenetics-palette.js';
+import { enterIKnowBlackjack } from './iknow-blackjack/iknow-blackjack.js';
 
 export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () => {} } = {}) {
   let blackjack = null; // {loop, table, hud, dispose()} while Room 2/blackjack is active
   let optogenetics = null; // {dispose()} while Room 2/optogenetics is active
+  let iknowBlackjack = null; // {dispose()} while Room 4 is active
   // Carries the learned Q-readout across a room switch: running BOTH rooms
   // at once isn't safe (they'd both be driving the same real brain -- Room
   // 1's food bowls and blackjack's odor injection target the very same real
@@ -42,6 +44,7 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
   const leaveRoom2Tasks = () => {
     if (blackjack) { savedBlackjackQ = blackjack.loop.q; blackjack.dispose(); blackjack = null; }
     if (optogenetics) { optogenetics.dispose(); optogenetics = null; }
+    if (iknowBlackjack) { iknowBlackjack.dispose(); iknowBlackjack = null; }
   };
 
   const root = document.createElement('div');
@@ -104,6 +107,12 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
     leaveRoom2Tasks();
     optogenetics = mountOptogenetics(lab);
     onLog('Room 2: tethered rig — optogenetics palette');
+  });
+
+  mkBtn('🕶️ Room 4 — Skill Downloader ("I Know Blackjack")', 'Load neural skills directly into a fresh fly brain.', () => {
+    leaveRoom2Tasks();
+    iknowBlackjack = enterIKnowBlackjack(lab);
+    onLog('Room 4: tethered rig — iknow-blackjack');
   });
 
   // Chaos Chair -- hidden from the menu for now (not needed day-to-day), but
