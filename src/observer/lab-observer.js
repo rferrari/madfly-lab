@@ -347,6 +347,13 @@ export class LabObserver {
       this.telemetry.draw();
     }
 
+    // Peak-hold for the loom readout: rise instantly, decay over ~1.5s. See
+    // the loom line below for why a transient needs this to be readable.
+    this._loomPeak = Math.max(
+      avatar.sensors.loom, (this._loomPeak ?? 0) - (dt ?? 1 / 60) / 1.5,
+    );
+    if (this._loomPeak < 0) this._loomPeak = 0;
+
     if (this.headerBody) {
       const scent = avatar.olfaction.strongest();
       const remote = brain.runtime?.info;
@@ -359,10 +366,23 @@ export class LabObserver {
         `<span style="color:${CSS.dim}">neurons</span> ${brain.nNeurons.toLocaleString()}`,
 
         `<span style="color:${CSS.dim}">speed</span> ${avatar.speed.toFixed(2)} u/s`,
-        `<span style="color:${CSS.dim}">loom</span> <span style="color:${avatar.sensors.loom > 0.1 ? CSS.red : CSS.bone}">L ${avatar.sensors.loomL.toFixed(2)} R ${avatar.sensors.loomR.toFixed(2)}</span>`,
-        avatar.sensors.wind > 0.02
-          ? `<span style="color:${CSS.dim}">wind</span> <span style="color:${CSS.cyan}">${avatar.sensors.wind.toFixed(2)}</span>`
-          : '',
+        // Three decimals, and a PEAK HOLD. Loom is a transient -- a strike is
+        // over in a few hundred ms -- so at two decimals a real event could
+        // round to 0.00, and even a big one could flash past between glances.
+        // The peak decays over ~1.5s so you can still see that it happened.
+        // Worth being precise about because the retinal panel's cells run an
+        // amber-to-red brightness ramp, which is easy to read as "loom firing"
+        // when it only means she is looking at something bright.
+        `<span style="color:${CSS.dim}">loom</span> `
+          + `<span style="color:${this._loomPeak > 0.02 ? CSS.red : CSS.bone}">`
+          + `L ${avatar.sensors.loomL.toFixed(3)} R ${avatar.sensors.loomR.toFixed(3)}</span>`
+          + (this._loomPeak > 0.02
+            ? ` <span style="color:${CSS.red}">peak ${this._loomPeak.toFixed(3)}</span>` : ''),
+        // Always shown, including at zero: "no wind" and "no wind readout" are
+        // different statements, and hiding the line made them look identical.
+        `<span style="color:${CSS.dim}">wind</span> `
+          + `<span style="color:${avatar.sensors.wind > 0.02 ? CSS.cyan : CSS.bone}">`
+          + `${avatar.sensors.wind.toFixed(3)}</span>`,
         `<span style="color:${CSS.dim}">poke</span> <span style="color:${avatar.sensors.touch > 0.05 ? CSS.amber : CSS.bone}">${avatar.sensors.touch.toFixed(2)}</span>`,
         scent.channel
           ? `<span style="color:${CSS.dim}">scent</span> ${scent.channel} ${scent.intensity.toFixed(2)}`

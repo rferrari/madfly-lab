@@ -98,11 +98,22 @@ export class RetinalView {
       }
 
       // Per-eye loom ring: which eye saw the threat is the signal that steers.
+      //
+      // LABELLED, not just coloured. The cells above run an amber-to-red
+      // brightness ramp, so a panel full of anything bright already looks red
+      // -- and a ring in a similar red reads as "loom is firing" when it is
+      // not. The word is unambiguous in a way the colour cannot be.
       const l = loom[side] ?? 0;
       if (l > 0.02) {
-        ctx.strokeStyle = `rgba(255, 51, 85, ${Math.min(1, l * 1.5)})`;
+        ctx.strokeStyle = `rgba(255, 51, 85, ${Math.min(1, 0.35 + l * 1.5)})`;
         ctx.lineWidth = 2 + l * 5;
         ctx.strokeRect(i * fieldW + 2, 2, fieldW - 4, canvas.height - 4);
+
+        ctx.fillStyle = 'rgb(255, 51, 85)';
+        ctx.font = `700 9px ${CSS.font}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`LOOM ${l.toFixed(2)}`, i * fieldW + fieldW / 2, 12);
+        ctx.textAlign = 'left';
       }
 
       ctx.fillStyle = CSS.dim;
