@@ -147,6 +147,28 @@ function buildRoom1() {
       : 'workstation: the fly is watching you type')),
   }));
 
+  // 8. Toad -- a baited trap, and the only thing in the room that produces a
+  //    real looming stimulus. The hazard fan cannot: blade sweep is circular
+  //    flow, and the looming detector's four-sector agreement test exists
+  //    precisely to reject that. A tongue shot at her is expansion from a
+  //    point, which is what LC4/LPLC2 actually detect -- and they supply 30.6%
+  //    of DNp01's input, so a strike drives the real Giant Fiber and the real
+  //    escape takeoff. Strike speed is randomised, so whether she gets away is
+  //    a genuine race between the tongue and her escape circuit.
+  lab.addStation(new Station.ToadTongue({
+    // DM1, not VA6: the ring below seats the toad next to the VA6 bowl, and
+    // two plumes of the same glomerulus 7.5 units apart would merge into one
+    // smell. On DM1 its only same-channel neighbour is the sugar cube, 19
+    // units away -- clear of the 8-unit radius on both sides.
+    scentType: 'ORN_DM1',
+    scentRadius: SCENT_RADIUS,
+    onStrike: (s) => log(`toad: STRIKE in ${(s * 1000).toFixed(0)}ms`),
+    onCatch: (s, t) => log(`toad: CAUGHT her (${(s * 1000).toFixed(0)}ms strike) `
+      + `— ${t.catches} caught / ${t.misses} escaped`),
+    onMiss: (s, t) => log(`toad: she got away (${(s * 1000).toFixed(0)}ms strike) `
+      + `— ${t.catches} caught / ${t.misses} escaped`),
+  }));
+
   // 7. Mate -- the missing half of the courtship circuit. Nothing in the arena
   //    emitted on the real pheromone channels before this, so ORN_DA1 -> pC1/aSP
   //    -> DNp13 sat at rest no matter what the fly did.
@@ -173,8 +195,12 @@ function buildRoom1() {
   // put every attractive thing in one arc, so a fly following her nose never
   // had cause to visit the other half of the room.
   lab.arrangeInRing(RING_RADIUS, {
+    // Nine slots now, 40 degrees apart. Scent stations still take every other
+    // one; with an odd count the ring has to close scent-next-to-scent
+    // somewhere, and that seam is the toad against the VA6 bowl -- which is
+    // why the toad emits DM1 instead.
     order: ['Food Bowl (VA6)', 'Screen', 'Sugar Cube', 'Light Switch',
-      'Poop Cube', 'Workstation', 'Mate', 'Hazard Fan'],
+      'Poop Cube', 'Workstation', 'Mate', 'Hazard Fan', 'Toad'],
   });
 
   // BAIT. Added after arrangeInRing on purpose -- these are not ring stations

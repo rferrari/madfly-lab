@@ -72,6 +72,7 @@ import { Mate } from './stations/mate.js';
 import { OdourCube, SugarCube, PoopCube } from './stations/cube.js';
 import { FoodBowl } from './stations/food-bowl.js';
 import { HazardFan } from './stations/hazard-fan.js';
+import { ToadTongue } from './stations/toad-tongue.js';
 
 /**
  * The `Station` namespace from the spec's example: `new Station.SlotMachine()`.
@@ -88,8 +89,9 @@ StationBase.SugarCube = SugarCube;
 StationBase.PoopCube = PoopCube;
 StationBase.FoodBowl = FoodBowl;
 StationBase.HazardFan = HazardFan;
+StationBase.ToadTongue = ToadTongue;
 
-export { SlotMachine, FoodBowl, HazardFan, Screen, Workstation, LightSwitch, Mate };
+export { SlotMachine, FoodBowl, HazardFan, ToadTongue, Screen, Workstation, LightSwitch, Mate };
 export { OdourCube, SugarCube, PoopCube } from './stations/cube.js';
 export { makeFloorLabel, makeScreenTexture } from './core/label.js';
 

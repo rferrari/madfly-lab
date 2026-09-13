@@ -16,6 +16,7 @@ import { Station, Triggers } from '../src/core/station.js';
 import { FoodBowl } from '../src/stations/food-bowl.js';
 import { SlotMachine } from '../src/stations/slot-machine.js';
 import { Workstation } from '../src/stations/workstation.js';
+import { ToadTongue } from '../src/stations/toad-tongue.js';
 import { LabAvatar } from '../src/avatar/lab-avatar.js';
 import { resolveGenotype, explainGenotype, explainChannel } from '../src/avatar/genotype.js';
 
@@ -418,6 +419,118 @@ describe('switching a station off', () => {
 
     bowl.setEnabled(false);
     assert.deepEqual(writes.at(-1), ['taste', 0], 'switching it off must end the meal');
+  });
+});
+
+describe('ToadTongue', () => {
+  const ctxAt = (x, y = 0.4, z = 0) => ({
+    avatar: { position: new THREE.Vector3(x, y, z), touch() { this.touched = true; } },
+    brain: { setInput() {} },
+  });
+
+  /** Tick a toad until it is out of the given phase, or the budget runs out. */
+  function tick(toad, ctx, seconds, dt = 1 / 60) {
+    for (let i = 0; i < Math.round(seconds / dt); i++) toad.tick(dt, ctx);
+  }
+
+  test('strikes only when she is close enough', () => {
+    const toad = new ToadTongue({ position: [0, 0, 0] });
+    toad.build();
+    tick(toad, ctxAt(0, 0.4, 20), 1);
+    assert.equal(toad.strikes, 0, 'should not strike at 20 units');
+    tick(toad, ctxAt(0, 0.4, 2), 0.1);
+    assert.ok(toad.strikes > 0, 'should strike when she walks up to it');
+  });
+
+  test('the tongue actually reaches out and comes back', () => {
+    const toad = new ToadTongue({ position: [0, 0, 0], catchRadius: 0 });
+    toad.build();
+    tick(toad, ctxAt(0, 0.4, 3), 0.05);
+    assert.equal(toad.phase, 'out');
+    let maxExt = 0;
+    for (let i = 0; i < 60 * 3; i++) {
+      toad.tick(1 / 60, ctxAt(0, 0.4, 3));
+      maxExt = Math.max(maxExt, toad.extension);
+      if (toad.phase === 'idle' && maxExt > 0) break;
+    }
+    assert.ok(maxExt > 0.99, `tongue should fully extend, reached ${maxExt.toFixed(2)}`);
+    assert.equal(toad.phase, 'idle', 'and retract');
+    assert.equal(toad.extension, 0);
+  });
+
+  test('catches a fly that stays put', () => {
+    const toad = new ToadTongue({ position: [0, 0, 0] });
+    toad.build();
+    const ctx = ctxAt(0, 0.42, 2.5);
+    tick(toad, ctx, 2);
+    assert.equal(toad.catches, 1, 'a stationary fly at point-blank range gets caught');
+    assert.ok(ctx.avatar.touched, 'being caught is a tactile event');
+  });
+
+  test('aim is committed, so she can dodge', () => {
+    // The tongue must NOT track her. If it did, the escape circuit would be
+    // decorative -- the trap would always win.
+    const toad = new ToadTongue({ position: [0, 0, 0], slowStrike: 0.5, fastStrike: 0.5 });
+    toad.build();
+    toad.tick(1 / 60, ctxAt(0, 0.4, 3));
+    assert.equal(toad.phase, 'out');
+    // she leaves, hard, while the tongue is still on its way
+    for (let i = 0; i < 60; i++) toad.tick(1 / 60, ctxAt(6, 0.4, 3));
+    assert.equal(toad.catches, 0, 'she got out of the way');
+    assert.equal(toad.misses, 1);
+  });
+
+  test('strike speed varies between strikes', () => {
+    const toad = new ToadTongue({ position: [0, 0, 0], cooldown: 0, catchRadius: 0 });
+    toad.build();
+    const speeds = new Set();
+    for (let s = 0; s < 12; s++) {
+      const ctx = ctxAt(0, 0.4, 3);
+      for (let i = 0; i < 60 * 4 && speeds.size === s; i++) {
+        toad.tick(1 / 60, ctx);
+        if (toad.phase === 'out') speeds.add(toad.lastSpeed);
+      }
+    }
+    assert.ok(speeds.size > 3, `strike speed should be randomised, saw ${speeds.size} values`);
+    for (const v of speeds) assert.ok(v >= toad.fastStrike && v <= toad.slowStrike);
+  });
+
+  test('a strike is a real looming stimulus, unlike a spinning rotor', () => {
+    // The point of the whole station. A tongue coming at her is expansion from
+    // a point; blade sweep is rotation, and the detector's four-sector
+    // agreement test rejects that by design.
+    const det = new LoomingDetector({ width: W, height: H });
+    let loom = 0;
+    let t = 0;
+    // an object rushing at the eye: its image grows fast
+    for (let r = 4; r <= 30; r += 3) {
+      t += 1 / 60;
+      loom = Math.max(loom, det.step(discFrame(r), t).loom);
+    }
+    assert.ok(loom > 0, 'an approaching tongue must register as loom');
+
+    // the same detector, shown a rotating pattern at fixed distance
+    const spin = new LoomingDetector({ width: W, height: H });
+    let spinLoom = 0;
+    t = 0;
+    for (let i = 0; i < 12; i++) {
+      t += 1 / 60;
+      const a = i * 0.5;
+      spinLoom = Math.max(spinLoom, spin.step(
+        discFrame(10, W / 2 + Math.cos(a) * 14, H / 2 + Math.sin(a) * 14), t,
+      ).loom);
+    }
+    assert.equal(spinLoom, 0, 'a blade going round in a circle is not a threat');
+  });
+
+  test('switching the toad off stops a strike in progress', () => {
+    const toad = new ToadTongue({ position: [0, 0, 0] });
+    toad.build();
+    toad.tick(1 / 60, ctxAt(0, 0.4, 3));
+    assert.equal(toad.phase, 'out');
+    toad.setEnabled(false);
+    assert.equal(toad.phase, 'idle');
+    assert.equal(toad.extension, 0);
   });
 });
 
