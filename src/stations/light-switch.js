@@ -25,56 +25,119 @@ export class LightSwitch extends Station {
     this.on = true;
   }
 
-  build() {
-    const group = new THREE.Group();
+  // build() {
+  //   const group = new THREE.Group();
 
-    const plate = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 1.3, 0.16),
-      new THREE.MeshStandardMaterial({ color: 0x201232, roughness: 0.45, metalness: 0.65 }),
-    );
-    plate.position.y = 0.85;
-    plate.castShadow = true;
-    group.add(plate);
+  //   const plate = new THREE.Mesh(
+  //     new THREE.BoxGeometry(0.9, 1.3, 0.16),
+  //     new THREE.MeshStandardMaterial({ color: 0x201232, roughness: 0.45, metalness: 0.65 }),
+  //   );
+  //   plate.position.y = 0.85;
+  //   plate.castShadow = true;
+  //   group.add(plate);
 
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.11, 1.0, 10),
-      new THREE.MeshStandardMaterial({ color: 0x1b1029, roughness: 0.6, metalness: 0.5 }),
-    );
-    post.position.y = 0.5;
-    group.add(post);
+  //   const post = new THREE.Mesh(
+  //     new THREE.CylinderGeometry(0.07, 0.11, 1.0, 10),
+  //     new THREE.MeshStandardMaterial({ color: 0x1b1029, roughness: 0.6, metalness: 0.5 }),
+  //   );
+  //   post.position.y = 0.5;
+  //   group.add(post);
 
-    this.toggleMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.42, 0.5, 0.14),
-      new THREE.MeshStandardMaterial({
-        color: 0xffd23d, emissive: 0xffd23d, emissiveIntensity: 1.6, roughness: 0.3,
-      }),
-    );
-    this.toggleMesh.position.set(0, 1.0, 0.13);
-    group.add(this.toggleMesh);
+  //   this.toggleMesh = new THREE.Mesh(
+  //     new THREE.BoxGeometry(0.42, 0.5, 0.14),
+  //     new THREE.MeshStandardMaterial({
+  //       color: 0xffd23d, emissive: 0xffd23d, emissiveIntensity: 1.6, roughness: 0.3,
+  //     }),
+  //   );
+  //   this.toggleMesh.position.set(0, 1.0, 0.13);
+  //   group.add(this.toggleMesh);
 
-    this.lamp = new THREE.PointLight(0xffd23d, 5, 5, 2);
-    this.lamp.position.set(0, 1.25, 0.5);
-    group.add(this.lamp);
+  //   this.lamp = new THREE.PointLight(0xffd23d, 5, 5, 2);
+  //   this.lamp.position.set(0, 1.25, 0.5);
+  //   group.add(this.lamp);
 
-    // Clicking the switch is the obvious interaction, so wire it directly.
-    this.onPoke = () => this.toggle();
-    return group;
-  }
+  //   // Clicking the switch is the obvious interaction, so wire it directly.
+  //   this.onPoke = () => this.toggle();
+  //   return group;
+  // }
+
+build() {
+  const group = new THREE.Group();
+
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.7, 0.12),
+    new THREE.MeshStandardMaterial({
+      color: 0x201232,
+      roughness: 0.45,
+      metalness: 0.65,
+    }),
+  );
+  plate.position.y = 0.5;
+  plate.castShadow = true;
+  group.add(plate);
+
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.07, 0.6, 10),
+    new THREE.MeshStandardMaterial({
+      color: 0x1b1029,
+      roughness: 0.6,
+      metalness: 0.5,
+    }),
+  );
+  post.position.y = 0.25;
+  group.add(post);
+
+  this.toggleMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.24, 0.28, 0.1),
+    new THREE.MeshStandardMaterial({
+      color: 0xffd23d,
+      emissive: 0xffd23d,
+      emissiveIntensity: 1.6,
+      roughness: 0.3,
+    }),
+  );
+  this.toggleMesh.position.set(0, 0.56, 0.11);
+  group.add(this.toggleMesh);
+
+  this.lamp = new THREE.PointLight(0xffd23d, 2.5, 3, 2);
+  this.lamp.position.set(0, 0.75, 0.35);
+  group.add(this.lamp);
+
+  this.onPoke = () => this.toggle();
+  return group;
+}
 
   toggle() { return this.set(!this.on); }
 
-  set(on) {
-    this.on = !!on;
-    this.lab?.arena.setLights(this.on);
-    if (this.toggleMesh) {
-      this.toggleMesh.position.y = this.on ? 1.0 : 0.72;
-      this.toggleMesh.material.emissiveIntensity = this.on ? 1.6 : 0.12;
-      this.toggleMesh.material.color.setHex(this.on ? 0xffd23d : 0x4a3a12);
-    }
-    if (this.lamp) this.lamp.intensity = this.on ? 5 : 0.6;
-    this.onToggle?.(this.on, this);
-    return this.on;
+  // set(on) {
+  //   this.on = !!on;
+  //   this.lab?.arena.setLights(this.on);
+  //   if (this.toggleMesh) {
+  //     this.toggleMesh.position.y = this.on ? 1.0 : 0.72;
+  //     this.toggleMesh.material.emissiveIntensity = this.on ? 1.6 : 0.12;
+  //     this.toggleMesh.material.color.setHex(this.on ? 0xffd23d : 0x4a3a12);
+  //   }
+  //   if (this.lamp) this.lamp.intensity = this.on ? 5 : 0.6;
+  //   this.onToggle?.(this.on, this);
+  //   return this.on;
+  // }
+
+set(on) {
+  this.on = !!on;
+  this.lab?.arena.setLights(this.on);
+
+  if (this.toggleMesh) {
+    this.toggleMesh.position.y = this.on ? 0.56 : 0.42;
+    this.toggleMesh.material.emissiveIntensity = this.on ? 1.6 : 0.12;
+    this.toggleMesh.material.color.setHex(
+      this.on ? 0xffd23d : 0x4a3a12
+    );
   }
+
+  if (this.lamp) this.lamp.intensity = this.on ? 2.5 : 0.6;
+  this.onToggle?.(this.on, this);
+  return this.on;
+}
 
   attach(lab) {
     super.attach(lab);
