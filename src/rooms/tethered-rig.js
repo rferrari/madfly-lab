@@ -20,7 +20,7 @@ export const DOCK_POSITION = new THREE.Vector3(0, 0, 1.5);
 // y=0: equipment (e.g. CardTable) builds its own geometry up from a floor
 // origin the same way every other Station does; a nonzero y here used to
 // double-stack with that, putting the table almost 2 units up.
-export const ORB_POSITION = new THREE.Vector3(0, 1.9, 0);
+export const ORB_POSITION = new THREE.Vector3(0, 3.9, 0);
 
 /**
  * Builds Room 2's static geometry and lighting into its own group, so the
@@ -100,7 +100,7 @@ export function buildTetheredRig(brainSource) {
   group.add(ambient);
 
   // Brain orb, floating above the platform.
-  const orb = new BrainOrb(brainSource, { magnification: 10 });
+  const orb = new BrainOrb(brainSource, { magnification: 4 });
   orb.object3D.position.copy(ORB_POSITION);
   group.add(orb.object3D);
 

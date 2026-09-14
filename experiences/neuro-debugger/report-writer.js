@@ -159,3 +159,25 @@ export function exportReportBrowser(content, filename = 'neuro_discovery_report.
     URL.revokeObjectURL(url);
   }, 100);
 }
+
+/**
+ * Saves the markdown report to a file (Node.js environments)
+ */
+export async function saveReport(content, filename = 'neuro_discovery_report.md') {
+  const fs = await import('fs');
+  const path = await import('path');
+  const reportsDir = path.join(process.cwd(), 'reports');
+  const filepath = path.join(reportsDir, filename);
+
+  try {
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true });
+    }
+    fs.writeFileSync(filepath, content, 'utf8');
+    console.log(`📝 Report saved to: ${filepath}`);
+    return filepath;
+  } catch (err) {
+    console.error(`❌ Failed to save report:`, err);
+    throw err;
+  }
+}

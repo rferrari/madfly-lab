@@ -10,7 +10,7 @@ import { BrainHalo } from '../../src/observer/brain-halo.js';
 import { DebuggerHUD } from './debugger-hud.js';
 import { PipelineRunner } from './pipeline-runner.js';
 import { TelemetryRecorder } from './recorder.js';
-import { AutoDiscoverEngine } from '../../examples/neuro-debugger/auto-discover.js';
+import { AutoDiscoverEngine } from './auto-discover.js';
 
 export function enterDebugger(lab) {
   if (lab.room !== 'tethered-rig') lab.setRoom('tethered-rig');

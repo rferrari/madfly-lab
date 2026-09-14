@@ -184,6 +184,19 @@ export class DebuggerHUD {
             cursor: pointer;
             transition: all 0.2s;
           ">📝 EXPORT REPORT</button>
+
+          <button id="btn-cheatsheet" style="
+            background: rgba(0, 229, 255, 0.15);
+            border: 1px solid ${CSS.cyan};
+            color: ${CSS.cyan};
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+          ">🧠 CHEATSHEET</button>
         </div>
 
         <!-- Custom Panels Container -->
@@ -375,6 +388,9 @@ export class DebuggerHUD {
     pauseBtn.addEventListener('click', () => this.togglePausePipeline());
     exportBtn.addEventListener('click', () => this.exportReport());
 
+    const cheatsheetBtn = this.container.querySelector('#btn-cheatsheet');
+    cheatsheetBtn?.addEventListener('click', () => this.showCheatsheetModal());
+
     const autoDiscoverBtn = this.container.querySelector('#btn-auto-discover');
     autoDiscoverBtn?.addEventListener('click', async () => {
       if (this.autoDiscover) {
@@ -421,6 +437,116 @@ export class DebuggerHUD {
     document.body.appendChild(this.container);
     this.updateLiveTelemetry();
     this._setupCustomPanel();
+  }
+
+  showCheatsheetModal() {
+    const existing = document.getElementById('neuro-cheatsheet-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'neuro-cheatsheet-modal';
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 4, 16, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      font-family: ${CSS.font};
+      padding: 16px;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background: rgba(18, 10, 34, 0.96);
+        border: 1px solid ${CSS.cyan};
+        box-shadow: 0 0 30px rgba(0, 229, 255, 0.25);
+        border-radius: 12px;
+        width: 540px;
+        max-width: 95vw;
+        max-height: 85vh;
+        overflow-y: auto;
+        padding: 20px 24px;
+        color: ${CSS.bone};
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        position: relative;
+      ">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${CSS.border}; padding-bottom: 10px;">
+          <h3 style="margin: 0; font-size: 15px; color: ${CSS.cyan}; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px;">
+            <span>🧠 Quick Cheatsheet: What the Buttons Mean</span>
+          </h3>
+          <button id="close-cheatsheet-btn" style="
+            background: transparent;
+            border: none;
+            color: ${CSS.dim};
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+          ">&times;</button>
+        </div>
+
+        <div style="font-size: 12px; line-height: 1.6; display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <div style="font-weight: bold; color: ${CSS.lime}; text-transform: uppercase; font-size: 11px; margin-bottom: 6px; letter-spacing: 0.05em;">
+              ⚡ Sensory Drives (Inputs):
+            </div>
+            <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;">
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">LPLC2</code> &amp; <code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">LC4</code> = <b>Visual Looming Threat</b> (expanding shadow / approaching predator).</li>
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">ORN_VA6</code> = <b>Food Scent</b> (fruit odor).</li>
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">ORN_DM1</code> = <b>Sugar Scent</b> (vinegar / attractive smell).</li>
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">ORN_DA1</code> = <b>Courtship Pheromone</b> (mating signal).</li>
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">PAM11</code> = <b>Dopamine Bath</b> (reward / excitement).</li>
+              <li><code style="color: ${CSS.cyan}; background: rgba(0,229,255,0.1); padding: 1px 5px; border-radius: 3px;">PPL1</code> = <b>Octopamine / Threat Bath</b> (aversive / punishment).</li>
+            </ul>
+          </div>
+
+          <div>
+            <div style="font-weight: bold; color: ${CSS.magenta}; text-transform: uppercase; font-size: 11px; margin-bottom: 6px; letter-spacing: 0.05em;">
+              🎯 Motor Readouts (Outputs):
+            </div>
+            <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;">
+              <li><code style="color: ${CSS.magenta}; background: rgba(255,43,214,0.1); padding: 1px 5px; border-radius: 3px;">DNa01</code> = Steering balance (left/right turn).</li>
+              <li><code style="color: ${CSS.magenta}; background: rgba(255,43,214,0.1); padding: 1px 5px; border-radius: 3px;">DNp09</code> = Forward walking speed.</li>
+              <li><code style="color: ${CSS.magenta}; background: rgba(255,43,214,0.1); padding: 1px 5px; border-radius: 3px;">DNp01</code> = <b>Giant Fiber Escape Jump</b> (explosive takeoff).</li>
+              <li><code style="color: ${CSS.magenta}; background: rgba(255,43,214,0.1); padding: 1px 5px; border-radius: 3px;">DNp13</code> = Courtship Acceptance Drive.</li>
+              <li><code style="color: ${CSS.magenta}; background: rgba(255,43,214,0.1); padding: 1px 5px; border-radius: 3px;">DNp06</code> = Feeding Drive.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; border-top: 1px solid ${CSS.border}; padding-top: 12px; margin-top: 4px;">
+          <button id="close-cheatsheet-bottom" style="
+            background: rgba(0, 229, 255, 0.2);
+            border: 1px solid ${CSS.cyan};
+            color: ${CSS.cyan};
+            border-radius: 6px;
+            padding: 6px 16px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+          ">Close Cheatsheet</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeBtn = overlay.querySelector('#close-cheatsheet-btn');
+    const closeBottomBtn = overlay.querySelector('#close-cheatsheet-bottom');
+    const closeFn = () => overlay.remove();
+
+    closeBtn.addEventListener('click', closeFn);
+    closeBottomBtn.addEventListener('click', closeFn);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeFn();
+    });
   }
 
   logNote(msg, type = 'info') {
