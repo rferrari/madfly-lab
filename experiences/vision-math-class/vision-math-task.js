@@ -4,7 +4,7 @@
  * left/right), and the fly must pick the side showing the EVEN count.
  *
  * Pure task logic -- no THREE.js, no brain, no DOM. Sensory encoding (state
- * -> real visual-interneuron drive) lives in math-sensory.js; the scene that
+ * -> real visual-interneuron drive) lives in dot-sensory.js; the scene that
  * wires this into TrainingLoop lives in tethered-scene.js. Same three-way
  * split experiences/blackjack/ uses (blackjack.js / blackjack-sensory.js /
  * blackjack-task.js), just two files instead of three since there's no
@@ -27,7 +27,7 @@
  * out as LEFT/RIGHT so nothing user-facing leaks the borrowed vocabulary.
  */
 
-import { encodeState } from './math-sensory.js';
+import { encodeState } from './dot-sensory.js';
 
 const MIN_DOTS = 1;
 const MAX_DOTS = 9;
@@ -78,7 +78,7 @@ export class Trial {
   }
 }
 
-/** Adapts Trial + math-sensory.js to the TrainingLoop task interface. */
+/** Adapts Trial + dot-sensory.js to the TrainingLoop task interface. */
 export class MathClassTask {
   constructor() { this.trial = null; }
 
@@ -106,7 +106,7 @@ export class MathClassTask {
 /**
  * Real DN channels read as the Q-function's input. `DNa01_L/R` are the
  * calibrated steering pair the visual interneurons (LPLC1/LPLC2, see
- * math-sensory.js) feed into; `DNp09`/`DNp03` are included per the task spec
+ * dot-sensory.js) feed into; `DNp09`/`DNp03` are included per the task spec
  * as additional real descending reads, same "small, real, calibrated slice"
  * approach blackjack's own feature set takes.
  */
