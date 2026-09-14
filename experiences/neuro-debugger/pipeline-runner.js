@@ -191,7 +191,7 @@ export class PipelineRunner {
       this.currentStep = 2;
       prog({ step: 2, totalSteps: 7, status: 'running',
              message: `[2/7] Applying scenario stimulus (${scenario.name}) to Control...`,
-             log: { type: 'stimulus', msg: `⚡ Applied Scenario Stimulus: ${scenario.name}${scenario.inputSummary ? ' (' + scenario.inputSummary + ')' : ''}` } });
+             log: { type: 'stimulus', msg: `Applied Scenario Stimulus: ${scenario.name}${scenario.inputSummary ? ' (' + scenario.inputSummary + ')' : ''}` } });
       scenario.setup(brain, this.lab);
       await new Promise(r => setTimeout(r, 50));
 
@@ -221,7 +221,7 @@ export class PipelineRunner {
       this.currentStep = 4;
       prog({ step: 4, totalSteps: 7, status: 'running',
              message: `[4/7] Minting Target Fly: ${mutName}`,
-             log: { type: 'mint', msg: `🧬 Minted Target Fly: ${mutName}` } });
+             log: { type: 'mint', msg: `Minted Target Fly: ${mutName}` } });
       this.lab.mintNewFly(mutantSpec);
       await new Promise(r => setTimeout(r, 50));
 
@@ -229,7 +229,7 @@ export class PipelineRunner {
       this.currentStep = 5;
       prog({ step: 5, totalSteps: 7, status: 'running',
              message: `[5/7] Applying scenario stimulus (${scenario.name}) to Target...`,
-             log: { type: 'stimulus', msg: `⚡ Applied Scenario Stimulus: ${scenario.name} (Target fly)` } });
+             log: { type: 'stimulus', msg: `Applied Scenario Stimulus: ${scenario.name} (Target fly)` } });
       scenario.setup(brain, this.lab);
       await new Promise(r => setTimeout(r, 50));
 
@@ -257,7 +257,7 @@ export class PipelineRunner {
       this.lab.mintNewFly('wild-type');
       prog({ step: 7, totalSteps: 7, status: 'running',
              message: '[7/7] Computing behavioral deltas & running unit assertions...',
-             log: { type: 'mint', msg: '🔄 Restored Baseline Fly: Wild-Type' } });
+             log: { type: 'mint', msg: 'Restored Baseline Fly: Wild-Type' } });
 
       // ── Step 7: Metrics & Deltas ──────────────────────────────────────────
       this.currentStep = 7;
@@ -284,7 +284,7 @@ export class PipelineRunner {
 
       prog({ step: 7, totalSteps: 7, status: 'complete',
              message: 'Pipeline execution complete!',
-             log: { type: 'info', msg: `📊 Trial Complete: ${deltaSummary}` },
+             log: { type: 'info', msg: `Trial Complete: ${deltaSummary}` },
              results });
       return results;
 
