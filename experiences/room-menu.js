@@ -26,11 +26,13 @@ import { CSS, GENOTYPES, CIRCUITS } from '../src/index.js';
 import { enterBlackjack } from './blackjack/tethered-scene.js';
 import { mountOptogenetics } from './optogenetics/optogenetics-palette.js';
 import { enterIKnowBlackjack } from './iknow-blackjack/iknow-blackjack.js';
+import { enterMathClass } from './math-class/tethered-scene.js';
 
 export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () => {} } = {}) {
   let blackjack = null; // {loop, table, hud, dispose()} while Room 2/blackjack is active
   let optogenetics = null; // {dispose()} while Room 2/optogenetics is active
   let iknowBlackjack = null; // {dispose()} while Room 4 is active
+  let mathClass = null; // {loop, hud, dispose()} while Room 5 is active
   // Carries the learned Q-readout across a room switch: running BOTH rooms
   // at once isn't safe (they'd both be driving the same real brain -- Room
   // 1's food bowls and blackjack's odor injection target the very same real
@@ -40,11 +42,13 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
   // the learned weights -- so coming back resumes training instead of
   // starting over from a blank readout.
   let savedBlackjackQ = null;
+  let savedMathClassQ = null;
 
   const leaveRoom2Tasks = () => {
     if (blackjack) { savedBlackjackQ = blackjack.loop.q; blackjack.dispose(); blackjack = null; }
     if (optogenetics) { optogenetics.dispose(); optogenetics = null; }
     if (iknowBlackjack) { iknowBlackjack.dispose(); iknowBlackjack = null; }
+    if (mathClass) { savedMathClassQ = mathClass.loop.q; mathClass.dispose(); mathClass = null; }
   };
 
   const root = document.createElement('div');
@@ -113,6 +117,14 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
     leaveRoom2Tasks();
     iknowBlackjack = enterIKnowBlackjack(lab);
     onLog('Room 4: tethered rig — iknow-blackjack');
+  });
+
+  mkBtn('🔢 Room 5 — Math Class (Even vs. Odd)', 'Stationary. Dot counts via real visual interneurons; a readout learns.', () => {
+    leaveRoom2Tasks();
+    mathClass = enterMathClass(lab, savedMathClassQ ? { initialQ: savedMathClassQ } : {});
+    onLog(savedMathClassQ
+      ? 'Room 5: tethered rig — math class (resumed, keeping what it learned)'
+      : 'Room 5: tethered rig — math class via LPLC1/LPLC2 -> DNa01');
   });
 
   // Chaos Chair -- hidden from the menu for now (not needed day-to-day), but
