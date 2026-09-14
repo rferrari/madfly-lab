@@ -236,6 +236,14 @@ export class PipelineRunner {
         DNp06: { control: lastCtrl.DNp06 || 0, mutant: lastMut.DNp06 || 0, delta: (lastMut.DNp06 || 0) - (lastCtrl.DNp06 || 0) }
       };
 
+      const deltas = {
+        DNa01: metrics.DNa01.delta,
+        DNp09: metrics.DNp09.delta,
+        DNp01: metrics.DNp01.delta,
+        DNp13: metrics.DNp13.delta,
+        DNp06: metrics.DNp06.delta
+      };
+
       const results = {
         scenario,
         controlSpec,
@@ -244,7 +252,8 @@ export class PipelineRunner {
         mutantName: mutName,
         controlFrames,
         mutantFrames,
-        metrics
+        metrics,
+        deltas
       };
 
       onProgress({ step: 7, totalSteps: 7, name: 'Complete', status: 'complete', message: 'Pipeline execution complete!', results });
@@ -257,6 +266,114 @@ export class PipelineRunner {
     } finally {
       this.running = false;
       this.paused = false;
+    }
+  }
+
+  async runCustomPipeline(scenario, controlSpec = 'wild-type', mutantSpec = 'wild-type', ticks = 200, onProgress = () => {}) {
+    let scenarioObj = scenario;
+    if (typeof scenario === 'string') {
+      scenarioObj = SCENARIOS.find(s => s.id === scenario) || SCENARIOS[0];
+    }
+    if (!scenarioObj || typeof scenarioObj !== 'object') {
+      scenarioObj = {
+        id: 'custom',
+        name: 'Custom Drive',
+        setup: (brain) => brain.setInput('LPLC2', 5.0),
+        teardown: (brain) => brain.setInput('LPLC2', 0)
+      };
+    }
+
+    const brain = this.lab.brain;
+    const dt = 1 / (brain?.tickHz || 60);
+
+    const getGenotypeLabel = (spec) => {
+      if (typeof spec === 'string') return spec;
+      if (spec && spec.silence) return `Mutant (${spec.silence.join(',')})`;
+      const found = GENOTYPES.find(g => JSON.stringify(g.spec) === JSON.stringify(spec));
+      return found ? found.name : 'Custom Genotype';
+    };
+
+    const ctrlName = getGenotypeLabel(controlSpec);
+    const mutName = getGenotypeLabel(mutantSpec);
+
+    try {
+      this.running = true;
+
+      // 1. Mint Control Fly
+      this.lab.mintNewFly(controlSpec);
+      await new Promise(r => setTimeout(r, 10));
+
+      // 2. Setup stimulus
+      if (scenarioObj.setup) scenarioObj.setup(brain, this.lab);
+
+      // 3. Record Control run
+      this.recorder.startRecording('control');
+      for (let i = 0; i < ticks; i++) {
+        brain.step(dt);
+        this.recorder.recordFrame({ phase: 'control', scenario: scenarioObj.name, genotype: ctrlName });
+      }
+      const controlFrames = this.recorder.stopRecording();
+      if (scenarioObj.teardown) scenarioObj.teardown(brain, this.lab);
+      brain.clearInputs();
+
+      // 4. Mint Target Fly
+      this.lab.mintNewFly(mutantSpec);
+      await new Promise(r => setTimeout(r, 10));
+
+      // 5. Setup stimulus for Target
+      if (scenarioObj.setup) scenarioObj.setup(brain, this.lab);
+
+      // 6. Record Target run
+      this.recorder.startRecording('mutant');
+      for (let i = 0; i < ticks; i++) {
+        brain.step(dt);
+        this.recorder.recordFrame({ phase: 'mutant', scenario: scenarioObj.name, genotype: mutName });
+      }
+      const mutantFrames = this.recorder.stopRecording();
+      if (scenarioObj.teardown) scenarioObj.teardown(brain, this.lab);
+      brain.clearInputs();
+
+      // Restore wild-type
+      this.lab.mintNewFly('wild-type');
+
+      // 7. Calculate metrics & deltas
+      const lastCtrl = controlFrames[controlFrames.length - 1] || {};
+      const lastMut = mutantFrames[mutantFrames.length - 1] || {};
+
+      const metrics = {
+        DNa01: { control: lastCtrl.steer || 0, mutant: lastMut.steer || 0, delta: (lastMut.steer || 0) - (lastCtrl.steer || 0) },
+        DNp09: { control: lastCtrl.DNp09 || 0, mutant: lastMut.DNp09 || 0, delta: (lastMut.DNp09 || 0) - (lastCtrl.DNp09 || 0) },
+        DNp01: { control: lastCtrl.DNp01 || 0, mutant: lastMut.DNp01 || 0, delta: (lastMut.DNp01 || 0) - (lastCtrl.DNp01 || 0) },
+        DNp13: { control: lastCtrl.DNp13 || 0, mutant: lastMut.DNp13 || 0, delta: (lastMut.DNp13 || 0) - (lastCtrl.DNp13 || 0) },
+        DNp06: { control: lastCtrl.DNp06 || 0, mutant: lastMut.DNp06 || 0, delta: (lastMut.DNp06 || 0) - (lastCtrl.DNp06 || 0) }
+      };
+
+      const deltas = {
+        DNa01: metrics.DNa01.delta,
+        DNp09: metrics.DNp09.delta,
+        DNp01: metrics.DNp01.delta,
+        DNp13: metrics.DNp13.delta,
+        DNp06: metrics.DNp06.delta
+      };
+
+      const results = {
+        scenario: scenarioObj,
+        controlSpec,
+        mutantSpec,
+        controlName: ctrlName,
+        mutantName: mutName,
+        controlFrames,
+        mutantFrames,
+        metrics,
+        deltas
+      };
+
+      return results;
+    } catch (err) {
+      console.error('Custom pipeline execution failed:', err);
+      return null;
+    } finally {
+      this.running = false;
     }
   }
 }

@@ -148,6 +148,19 @@ export class DebuggerHUD {
             transition: all 0.2s;
           ">▶ LAUNCH PIPELINE</button>
 
+          <button id="btn-auto-discover" style="
+            background: linear-gradient(135deg, rgba(255, 43, 214, 0.25), rgba(0, 229, 255, 0.25));
+            border: 1px solid ${CSS.magenta};
+            color: ${CSS.magenta};
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+          ">⚡ AUTO-DISCOVER SWEEPER</button>
+
           <button id="btn-pause-pipeline" style="
             background: rgba(255, 138, 61, 0.15);
             border: 1px solid ${CSS.amber};
@@ -172,6 +185,9 @@ export class DebuggerHUD {
             transition: all 0.2s;
           ">📝 EXPORT REPORT</button>
         </div>
+
+        <!-- Custom Panels Container -->
+        <div id="hud-custom-panels" style="display: flex; flex-direction: column; gap: 6px;"></div>
 
         <!-- PIPELINE STUDIO STEP VISUALIZER WIDGET -->
         <div id="pipeline-studio-bar" style="
@@ -359,6 +375,21 @@ export class DebuggerHUD {
     pauseBtn.addEventListener('click', () => this.togglePausePipeline());
     exportBtn.addEventListener('click', () => this.exportReport());
 
+    const autoDiscoverBtn = this.container.querySelector('#btn-auto-discover');
+    autoDiscoverBtn?.addEventListener('click', async () => {
+      if (this.autoDiscover) {
+        if (this.autoDiscover.isScanning) {
+          this.autoDiscover.stopScan();
+          this.setTicker('⏸ Auto-Discover scan stopped.');
+        } else {
+          const currentScenario = SCENARIOS.find(s => s.id === this.selectedScenario) || SCENARIOS[0];
+          await this.autoDiscover.startScan(currentScenario);
+        }
+      } else {
+        this.addNote('Auto-Discover Engine not initialized.', 'warning');
+      }
+    });
+
     playBtn.addEventListener('click', () => this.toggleReplay());
     scrubber.addEventListener('input', (e) => {
       const frameIdx = parseInt(e.target.value, 10);
@@ -389,6 +420,186 @@ export class DebuggerHUD {
   mount() {
     document.body.appendChild(this.container);
     this.updateLiveTelemetry();
+    this._setupCustomPanel();
+  }
+
+  logNote(msg, type = 'info') {
+    this.addNote(msg, type);
+  }
+
+  triggerAlert(msg) {
+    this.setTicker(msg, true);
+    this.addNote(msg, 'warning');
+  }
+
+  updateProgress(current, total, msg) {
+    this.setTicker(`[${current}/${total}] ${msg}`);
+  }
+
+  createPanel(title) {
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      background: ${CSS.panel};
+      border: 1px solid ${CSS.border};
+      border-radius: 8px;
+      padding: 8px 14px;
+      margin-right: 268px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: auto;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    `;
+
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `
+      font-size: 11px;
+      font-weight: bold;
+      color: ${CSS.cyan};
+      border-bottom: 1px solid ${CSS.border};
+      padding-bottom: 4px;
+      letter-spacing: 0.05em;
+    `;
+    titleEl.textContent = title;
+    panel.appendChild(titleEl);
+
+    const controlsContainer = document.createElement('div');
+    controlsContainer.style.cssText = `
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    `;
+    panel.appendChild(controlsContainer);
+
+    const targetContainer = this.container.querySelector('#hud-custom-panels') || this.container.children[0];
+    if (targetContainer) targetContainer.appendChild(panel);
+
+    return {
+      element: panel,
+      addSelect: (label, options, onChange) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+        wrapper.innerHTML = `
+          <label style="font-size: 10px; color: ${CSS.dim}; text-transform: uppercase;">${label}:</label>
+          <select style="
+            background: rgba(11, 6, 20, 0.9);
+            color: ${CSS.cyan};
+            border: 1px solid ${CSS.border};
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            cursor: pointer;
+          ">
+            ${options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        `;
+        const select = wrapper.querySelector('select');
+        select.addEventListener('change', (e) => onChange(e.target.value));
+        controlsContainer.appendChild(wrapper);
+        return wrapper;
+      },
+      addSlider: (label, min, max, defaultVal, onChange) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+        wrapper.innerHTML = `
+          <label style="font-size: 10px; color: ${CSS.dim}; text-transform: uppercase;">${label}:</label>
+          <input type="range" min="${min}" max="${max}" value="${defaultVal}" step="0.5" style="accent-color: ${CSS.cyan}; width: 80px; cursor: pointer;"/>
+          <span style="font-size: 10px; color: ${CSS.cyan}; min-width: 25px;">${defaultVal}</span>
+        `;
+        const slider = wrapper.querySelector('input');
+        const valDisp = wrapper.querySelector('span');
+        slider.addEventListener('input', (e) => {
+          const v = parseFloat(e.target.value);
+          valDisp.textContent = v;
+          onChange(v);
+        });
+        controlsContainer.appendChild(wrapper);
+        return wrapper;
+      },
+      addInput: (label, defaultVal, onChange) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+        wrapper.innerHTML = `
+          <label style="font-size: 10px; color: ${CSS.dim}; text-transform: uppercase;">${label}:</label>
+          <input type="text" value="${defaultVal}" style="
+            background: rgba(11, 6, 20, 0.9);
+            color: ${CSS.magenta};
+            border: 1px solid ${CSS.border};
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            width: 80px;
+          "/>
+        `;
+        const input = wrapper.querySelector('input');
+        input.addEventListener('change', (e) => onChange(e.target.value));
+        controlsContainer.appendChild(wrapper);
+        return wrapper;
+      },
+      addButton: (label, onClick) => {
+        const btn = document.createElement('button');
+        btn.style.cssText = `
+          background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(154, 92, 255, 0.25));
+          border: 1px solid ${CSS.cyan};
+          color: ${CSS.cyan};
+          border-radius: 6px;
+          padding: 4px 10px;
+          font-family: ${CSS.font};
+          font-size: 11px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+        `;
+        btn.textContent = label;
+        btn.addEventListener('click', onClick);
+        controlsContainer.appendChild(btn);
+        return btn;
+      }
+    };
+  }
+
+  _setupCustomPanel() {
+    if (this._customPanelMounted) return;
+    this._customPanelMounted = true;
+
+    this.selectedInput = 'LPLC2';
+    this.inputValue = 5.0;
+    this.customMutantSpec = { silence: ['LC4'] };
+
+    const customPanel = this.createPanel('🔬 Custom Circuit Discovery');
+
+    // 1. Pick Sensory Drive
+    customPanel.addSelect('Sensory Drive', ['LPLC2', 'LC4', 'ORN_VA6', 'ORN_DM1', 'PAM11', 'PPL1'], (channel) => {
+      this.selectedInput = channel;
+    });
+
+    customPanel.addSlider('Drive Level', 0, 20, 5.0, (val) => {
+      this.inputValue = val;
+    });
+
+    // 2. Select Mutant or Unmapped Prefix
+    customPanel.addInput('Lesion Target (Prefix / Cell ID)', 'LC4', (targetPrefix) => {
+      this.customMutantSpec = { silence: [targetPrefix] };
+      // Highlight target cluster in floating 3D brain orb
+      if (this.lab.brain && this.lab.brain.pack) {
+        const indices = this.lab.brain.pack.indicesOfPrefix?.(targetPrefix) || this.lab.brain.pack.indicesOf?.(targetPrefix);
+        if (this.halo && indices && indices.length) this.halo.setCluster(indices);
+      }
+    });
+
+    // 3. Launch Discovery Run
+    customPanel.addButton('🚀 Run Custom Discovery Sweep', async () => {
+      const customScenario = {
+        id: 'custom',
+        name: `Custom Drive (${this.selectedInput}=${this.inputValue})`,
+        setup: (brain) => brain.setInput(this.selectedInput, this.inputValue),
+        teardown: (brain) => brain.setInput(this.selectedInput, 0)
+      };
+      await this.runner.runCustomPipeline(customScenario, 'wild-type', this.customMutantSpec);
+    });
   }
 
   setTicker(msg, isAlert = false) {

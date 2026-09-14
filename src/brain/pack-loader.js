@@ -89,9 +89,36 @@ export class ConnectomePack {
     const out = [];
     for (let i = 0; i < this.nNeurons; i++) {
       const name = names[t[i]];
+      if (!name) continue;
       if (wanted ? name.startsWith(wanted) : name === typeName) out.push(i);
     }
     return Int32Array.from(out);
+  }
+
+  get prefixes() {
+    if (this._prefixes) return this._prefixes;
+    const set = new Set();
+    if (this.typeNames) {
+      for (let i = 0; i < this.typeNames.length; i++) {
+        const name = this.typeNames[i];
+        if (!name) continue;
+        set.add(name);
+        const root = name.split('_')[0];
+        if (root) set.add(root);
+      }
+    }
+    this._prefixes = Array.from(set).sort();
+    return this._prefixes;
+  }
+
+  indicesOf(typeName) {
+    if (!typeName) return new Int32Array(0);
+    return this.indicesOfType(typeName);
+  }
+
+  indicesOfPrefix(prefix) {
+    if (!prefix) return new Int32Array(0);
+    return this.indicesOfType(prefix.endsWith('*') ? prefix : prefix + '*');
   }
 
   describe() {

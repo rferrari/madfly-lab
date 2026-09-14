@@ -10,6 +10,7 @@ import { BrainHalo } from '../../src/observer/brain-halo.js';
 import { DebuggerHUD } from './debugger-hud.js';
 import { PipelineRunner } from './pipeline-runner.js';
 import { TelemetryRecorder } from './recorder.js';
+import { AutoDiscoverEngine } from '../../examples/neuro-debugger/auto-discover.js';
 
 export function enterDebugger(lab) {
   if (lab.room !== 'tethered-rig') lab.setRoom('tethered-rig');
@@ -17,6 +18,9 @@ export function enterDebugger(lab) {
   const recorder = new TelemetryRecorder(lab);
   const runner = new PipelineRunner(lab, recorder);
   const hud = new DebuggerHUD(lab, runner, recorder);
+  const autoDiscover = new AutoDiscoverEngine(lab, runner, hud);
+  hud.autoDiscover = autoDiscover;
+
   hud.mount();
 
   // Attach 3D soma halo highlight overlay to the floating BrainOrb
@@ -27,13 +31,15 @@ export function enterDebugger(lab) {
       halo.attach();
       // Highlight LC4 cluster if pack is available
       if (lab.brain && lab.brain.pack) {
-        const lc4Indices = lab.brain.pack.indicesOf('LC4') || [];
+        const lc4Indices = lab.brain.pack.indicesOf('LC4') || lab.brain.pack.indicesOfPrefix('LC4') || [];
         if (lc4Indices.length) halo.setCluster(lc4Indices);
       }
     } catch (err) {
       console.warn('BrainHalo initialization warning:', err);
     }
   }
+
+  hud.halo = halo;
 
   // Periodic telemetry sampling ticker when not replaying
   const ticker = setInterval(() => {
@@ -51,6 +57,7 @@ export function enterDebugger(lab) {
     hud,
     recorder,
     runner,
+    autoDiscover,
     halo,
     dispose() {
       clearInterval(ticker);
