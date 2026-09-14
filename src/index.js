@@ -62,6 +62,7 @@ export { BrainOrb } from './observer/brain-orb.js';
 export { TrainingHUD } from './observer/training-hud.js';
 export { BrainRaycaster, DEFAULT_POINTS_THRESHOLD } from './observer/brain-raycaster.js';
 export { BrainHalo } from './observer/brain-halo.js';
+export { DebuggerDashboard } from './observer/debugger-dashboard.js';
 
 import { Station as StationBase } from './core/station.js';
 import { SlotMachine } from './stations/slot-machine.js';

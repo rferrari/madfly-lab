@@ -27,12 +27,14 @@ import { enterBlackjack } from './blackjack/tethered-scene.js';
 import { mountOptogenetics } from './optogenetics/optogenetics-palette.js';
 import { enterIKnowBlackjack } from './iknow-blackjack/iknow-blackjack.js';
 import { enterMathClass } from './math-class/tethered-scene.js';
+import { enterVisionMathClass } from './vision-math-class/tethered-scene.js';
 
 export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () => {} } = {}) {
   let blackjack = null; // {loop, table, hud, dispose()} while Room 2/blackjack is active
   let optogenetics = null; // {dispose()} while Room 2/optogenetics is active
   let iknowBlackjack = null; // {dispose()} while Room 4 is active
   let mathClass = null; // {loop, hud, dispose()} while Room 5 is active
+  let neuroDebugger = null; // {hud, recorder, runner, halo, dispose()} while Room 7 is active
   // Carries the learned Q-readout across a room switch: running BOTH rooms
   // at once isn't safe (they'd both be driving the same real brain -- Room
   // 1's food bowls and blackjack's odor injection target the very same real
@@ -49,6 +51,7 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
     if (optogenetics) { optogenetics.dispose(); optogenetics = null; }
     if (iknowBlackjack) { iknowBlackjack.dispose(); iknowBlackjack = null; }
     if (mathClass) { savedMathClassQ = mathClass.loop.q; mathClass.dispose(); mathClass = null; }
+    if (neuroDebugger) { neuroDebugger.dispose(); neuroDebugger = null; }
   };
 
   const root = document.createElement('div');
@@ -125,6 +128,25 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
     onLog(savedMathClassQ
       ? 'Room 5: tethered rig — math class (resumed, keeping what it learned)'
       : 'Room 5: tethered rig — math class via LPLC1/LPLC2 -> DNa01');
+  });
+
+    mkBtn('🔢 Room 6 — Vision Math Class (Even vs. Odd)', 'Stationary. Dot counts via real visual interneurons; a readout learns.', () => {
+    leaveRoom2Tasks();
+    mathClass = enterVisionMathClass(lab, savedMathClassQ ? { initialQ: savedMathClassQ } : {});
+    onLog(savedMathClassQ
+      ? 'Room 6: tethered rig — vision math class (resumed, keeping what it learned)'
+      : 'Room 6: tethered rig — vision math class via LPLC1/LPLC2 -> DNa01');
+  });
+
+  mkBtn('🔬 Room 7 — Neuro-Debugger Scientist Workbench', 'Automated AI connectomics workbench & 3D telemetry dashboard.', () => {
+    leaveRoom2Tasks();
+    import('./neuro-debugger/enter.js').then(({ enterDebugger }) => {
+      neuroDebugger = enterDebugger(lab);
+      onLog('Room 7: Neuro-Debugger Scientist Workbench active');
+    }).catch(err => {
+      console.error('Failed to enter Neuro-Debugger:', err);
+      onLog('Room 7: Neuro-Debugger — failed to initialize');
+    });
   });
 
   // Chaos Chair -- hidden from the menu for now (not needed day-to-day), but
