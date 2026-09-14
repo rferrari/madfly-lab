@@ -211,18 +211,10 @@
         margin-bottom: 20px;
       }
 
-      /* Existing styles for keys and log */
+      /* Keyboard hint overlay — hidden by default, shown via ? modal */
       #keys {
-        position: fixed;
-        left: 16px;
-        top: 16px;
-        z-index: 15;
-        color: rgba(232,224,245,.45);
-        font: 10px 'SF Mono', ui-monospace, monospace;
-        line-height: 1.7;
-        pointer-events: none;
+        display: none;
       }
-      #keys b { color: #00e5ff; font-weight: 500; }
       #log {
         position: fixed;
         left: 16px;
@@ -238,6 +230,83 @@
         transition: opacity .35s ease;
         pointer-events: none;
       }
+
+      /* Help ? button */
+      #help-btn {
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        z-index: 20;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(18,10,34,.75);
+        border: 1px solid rgba(0,229,255,.35);
+        color: rgba(0,229,255,.8);
+        font: bold 12px 'SF Mono', ui-monospace, monospace;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+        transition: border-color .2s, color .2s, box-shadow .2s;
+        backdrop-filter: blur(4px);
+      }
+      #help-btn:hover {
+        border-color: #00e5ff;
+        color: #00e5ff;
+        box-shadow: 0 0 10px rgba(0,229,255,.4);
+      }
+
+      /* Help modal overlay */
+      #help-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        background: rgba(6,2,14,.72);
+        backdrop-filter: blur(6px);
+        align-items: center;
+        justify-content: center;
+      }
+      #help-modal-overlay.open {
+        display: flex;
+      }
+      #help-modal-card {
+        background: rgba(14,8,28,.92);
+        border: 1px solid rgba(0,229,255,.3);
+        box-shadow: 0 0 40px rgba(0,229,255,.15), inset 0 0 20px rgba(154,92,255,.06);
+        border-radius: 14px;
+        padding: 28px 32px;
+        max-width: 480px;
+        width: 90%;
+        font: 12px 'SF Mono', ui-monospace, monospace;
+        color: rgba(232,224,245,.8);
+        line-height: 1.8;
+        position: relative;
+      }
+      #help-modal-card h3 {
+        margin: 0 0 16px 0;
+        font-size: 13px;
+        letter-spacing: .18em;
+        color: #00e5ff;
+        text-shadow: 0 0 10px rgba(0,229,255,.4);
+      }
+      #help-modal-card b { color: #00e5ff; font-weight: 500; }
+      #help-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: none;
+        border: none;
+        color: rgba(232,224,245,.5);
+        font: 18px 'SF Mono', ui-monospace, monospace;
+        cursor: pointer;
+        line-height: 1;
+        transition: color .2s;
+      }
+      #help-modal-close:hover { color: #00e5ff; }
     </style>
   </head>
   <body>
@@ -310,8 +379,8 @@
             <div class="feature-card">
               <h3>⚡ Connectome Neural Runtimes</h3>
               <p>
-                Calculates dynamic updates (\(a \leftarrow \tanh(W \cdot a + I)\)) across full sparse connectivity matrices on CPU/GPU (Mode A) 
-                or sub-second pruned behavioral subgraphs in-browser (Mode B).
+                Simulates how neural activity propagates through sparse connectome networks on CPU/GPU (Mode A), 
+                or through optimized behavioral subgraphs directly in the browser (Mode B).
               </p>
             </div>
             <div class="feature-card">
@@ -338,6 +407,46 @@
       <b>M</b> room menu (free-roaming / tethered rig / chaos chair)
     </div>
     <div id="log"></div>
+
+    <!-- Help ? button — always visible in-game, top-left -->
+    <button id="help-btn" title="Keyboard shortcuts">?</button>
+
+    <!-- Help modal — clones content from #keys -->
+    <div id="help-modal-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div id="help-modal-card">
+        <button id="help-modal-close" aria-label="Close">×</button>
+        <h3>⌨ KEYBOARD CONTROLS</h3>
+        <div id="help-modal-body"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const btn     = document.getElementById('help-btn');
+        const overlay = document.getElementById('help-modal-overlay');
+        const closeBtn= document.getElementById('help-modal-close');
+        const body    = document.getElementById('help-modal-body');
+
+        function openHelp() {
+          // Populate from #keys each time (content may have been updated by lab)
+          const keys = document.getElementById('keys');
+          body.innerHTML = keys ? keys.innerHTML : '—';
+          overlay.classList.add('open');
+        }
+        function closeHelp() {
+          overlay.classList.remove('open');
+        }
+
+        btn.addEventListener('click', openHelp);
+        closeBtn.addEventListener('click', closeHelp);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeHelp();
+        });
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && overlay.classList.contains('open')) closeHelp();
+        });
+      })();
+    </script>
     <script type="module">
       let shown = 0;
       const enterLab = () => {
