@@ -237,6 +237,53 @@ describe('Neuro-Debugger Behavioral Unit Tests', () => {
       assert.strictEqual(results.controlFrames.length, 50);
       assert.strictEqual(results.mutantFrames.length, 50);
       assert.ok(results.metrics.DNp01, 'Metrics computed for DNp01');
+      assert.ok(results.peakMetrics.DNp01, 'Peak metrics computed for DNp01');
+      assert.ok(results.deltas.DNp01 !== undefined, 'Deltas computed for DNp01');
+    } finally {
+      await lab.stop();
+    }
+  });
+
+  test('test_peak_metrics_and_double_knockout: Evaluates redundancy in looming circuit', async () => {
+    const packUrl = `file://${process.cwd()}/packs/courtship.mflpack`;
+    const lab = new MadFlyLab({
+      mode: 'pruned-subgraph',
+      canvas: '#offscreen-canvas',
+      circuit: 'courtship',
+      packUrl: packUrl,
+      observer: false
+    });
+
+    const { TelemetryRecorder } = await import('../experiences/neuro-debugger/recorder.js');
+    const { PipelineRunner } = await import('../experiences/neuro-debugger/pipeline-runner.js');
+    const { generateMarkdownReport } = await import('../experiences/neuro-debugger/report-writer.js');
+
+    await lab.start();
+    try {
+      const recorder = new TelemetryRecorder(lab);
+      const runner = new PipelineRunner(lab, recorder);
+
+      // Test double knockout LC4 + LPLC2
+      const doubleKO = { silence: ['LC4', 'LPLC2'] };
+      const results = await runner.runPipeline('looming', 'wild-type', doubleKO, 60);
+
+      assert.ok(results, 'Double knockout pipeline returned results');
+      assert.ok(results.peakMetrics, 'Peak metrics exist in results');
+
+      // Test markdown report generation
+      const report = generateMarkdownReport(results, ['Test note 1'], [{
+        prefix: 'TEST_PREFIX',
+        scenario: 'Looming Hazard (LPLC2)',
+        affectedMotor: 'DNp01',
+        maxDelta: 0.42,
+        timestamp: new Date().toISOString()
+      }]);
+
+      assert.ok(report.includes('Executive Summary'), 'Report includes Executive Summary');
+      assert.ok(report.includes('Table 1 — Peak Trial Activation Comparison'), 'Report includes Table 1');
+      assert.ok(report.includes('Table 2 — End-Frame Steady-State Comparison'), 'Report includes Table 2');
+      assert.ok(report.includes('Auto-Discovered Circuit Anomalies'), 'Report includes Auto-Discovered section');
+      assert.ok(report.includes('Biological Reasoning'), 'Report includes biological reasoning');
     } finally {
       await lab.stop();
     }

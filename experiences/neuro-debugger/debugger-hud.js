@@ -1,5 +1,8 @@
 /**
  * Scientist Workbench & Mission-Control 3D Dashboard UI for Room 7 Neuro-Debugger
+ *
+ * HONESTY NOTE: Activations are dimensionless tanh values in [-1, 1], not mV or Hz.
+ * Sensory drives are engineered measurements into real cell populations.
  */
 
 import { CSS } from '../../src/core/theme.js';
@@ -11,7 +14,7 @@ export class DebuggerHUD {
     this.lab = lab;
     this.runner = runner;
     this.recorder = recorder;
-    
+
     this.container = document.createElement('div');
     this.container.id = 'neuro-debugger-workbench';
     this.container.style.cssText = `
@@ -36,6 +39,8 @@ export class DebuggerHUD {
     this.notes = [];
     this.isPlayingReplay = false;
     this.replayTimer = null;
+    this.halo = null;
+    this.autoDiscover = null;
 
     this._buildUI();
   }
@@ -56,72 +61,112 @@ export class DebuggerHUD {
           box-shadow: 0 0 15px rgba(0, 229, 255, 0.15);
         ">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="color: ${CSS.cyan}; font-weight: bold; letter-spacing: 0.12em; font-size: 12px;">🔬 NEURO-DEBUGGER WORKBENCH</span>
+            <span style="color: ${CSS.cyan}; font-weight: bold; letter-spacing: 0.12em; font-size: 12px;">🔬 NEURO-DEBUGGER</span>
             <span id="debugger-ticker" style="color: ${CSS.bone}; font-size: 11px;">Select scenario, control & target fly to manage pipeline.</span>
           </div>
           <div style="font-size: 10px; color: ${CSS.dim};">ROOM 7 · CONNECTOMICS AGENT</div>
         </div>
 
-        <!-- Toolbar controls -->
+        <!-- Glassmorphic Toolbar Controls -->
         <div style="
           background: ${CSS.panel};
           border: 1px solid ${CSS.border};
           border-radius: 8px;
-          padding: 8px 14px;
+          padding: 8px 12px;
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           flex-wrap: wrap;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
         ">
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <!-- Scenario Selector Group -->
+          <div class="hud-control-group" style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+          ">
             <label style="font-size: 10px; color: ${CSS.dim}; text-transform: uppercase;">Scenario:</label>
             <select id="scenario-select" style="
               background: rgba(11, 6, 20, 0.9);
               color: ${CSS.cyan};
               border: 1px solid ${CSS.border};
               border-radius: 4px;
-              padding: 4px 6px;
+              padding: 3px 6px;
               font-family: ${CSS.font};
               font-size: 11px;
               cursor: pointer;
+              outline: none;
             ">
               ${SCENARIOS.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
             </select>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label style="font-size: 10px; color: ${CSS.lime}; text-transform: uppercase;">Control Fly:</label>
+          <!-- Control Fly Selector Group -->
+          <div class="hud-control-group" style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(57, 255, 136, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+          ">
+            <label style="font-size: 10px; color: ${CSS.lime}; text-transform: uppercase;">Control:</label>
             <select id="control-select" style="
               background: rgba(11, 6, 20, 0.9);
               color: ${CSS.lime};
               border: 1px solid ${CSS.border};
               border-radius: 4px;
-              padding: 4px 6px;
+              padding: 3px 6px;
               font-family: ${CSS.font};
               font-size: 11px;
               cursor: pointer;
+              outline: none;
             ">
               ${GENOTYPES.map((g, idx) => `<option value="${g.id}" ${idx === 0 ? 'selected' : ''}>${g.name}</option>`).join('')}
             </select>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label style="font-size: 10px; color: ${CSS.magenta}; text-transform: uppercase;">Target Fly:</label>
+          <!-- Target Fly Selector Group -->
+          <div class="hud-control-group" style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 43, 214, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+          ">
+            <label style="font-size: 10px; color: ${CSS.magenta}; text-transform: uppercase;">Target:</label>
             <select id="genotype-select" style="
               background: rgba(11, 6, 20, 0.9);
               color: ${CSS.magenta};
               border: 1px solid ${CSS.border};
               border-radius: 4px;
-              padding: 4px 6px;
+              padding: 3px 6px;
               font-family: ${CSS.font};
               font-size: 11px;
               cursor: pointer;
+              outline: none;
             ">
               ${GENOTYPES.map((g, idx) => `<option value="${g.id}" ${idx === 2 ? 'selected' : ''}>${g.name}</option>`).join('')}
             </select>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <!-- Ticks Input Group -->
+          <div class="hud-control-group" style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+          ">
             <label style="font-size: 10px; color: ${CSS.dim}; text-transform: uppercase;">Ticks:</label>
             <input type="number" id="ticks-input" value="300" min="100" max="1000" step="50" style="
               background: rgba(11, 6, 20, 0.9);
@@ -131,12 +176,14 @@ export class DebuggerHUD {
               padding: 3px 6px;
               font-family: ${CSS.font};
               font-size: 11px;
-              width: 50px;
+              width: 48px;
+              outline: none;
             "/>
           </div>
 
+          <!-- Action Buttons -->
           <button id="btn-run-pipeline" style="
-            background: linear-gradient(135deg, rgba(0, 229, 255, 0.25), rgba(154, 92, 255, 0.25));
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.3), rgba(154, 92, 255, 0.3));
             border: 1px solid ${CSS.cyan};
             color: ${CSS.cyan};
             border-radius: 6px;
@@ -160,6 +207,18 @@ export class DebuggerHUD {
             cursor: pointer;
             transition: all 0.2s;
           ">⚡ AUTO-DISCOVER SWEEPER</button>
+
+          <button id="btn-export-discoveries" style="
+            background: rgba(255, 43, 214, 0.15);
+            border: 1px solid ${CSS.magenta};
+            color: ${CSS.magenta};
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-family: ${CSS.font};
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+          ">💾 EXPORT JSON</button>
 
           <button id="btn-pause-pipeline" style="
             background: rgba(255, 138, 61, 0.15);
@@ -190,7 +249,7 @@ export class DebuggerHUD {
             border: 1px solid ${CSS.cyan};
             color: ${CSS.cyan};
             border-radius: 6px;
-            padding: 5px 12px;
+            padding: 5px 10px;
             font-family: ${CSS.font};
             font-size: 11px;
             font-weight: bold;
@@ -215,13 +274,13 @@ export class DebuggerHUD {
         ">
           <span style="font-size: 10px; color: ${CSS.cyan}; font-weight: bold; min-width: 95px;">PIPELINE STEPS:</span>
           <div id="pipeline-step-pills" style="display: flex; gap: 4px; flex: 1; align-items: center;">
-            <span class="step-pill" data-step="1" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">1. Mint Control</span>
-            <span class="step-pill" data-step="2" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">2. Stimulus (Ctrl)</span>
-            <span class="step-pill" data-step="3" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">3. Record Ctrl</span>
-            <span class="step-pill" data-step="4" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">4. Mint Target</span>
-            <span class="step-pill" data-step="5" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">5. Stimulus (Target)</span>
-            <span class="step-pill" data-step="6" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">6. Record Target</span>
-            <span class="step-pill" data-step="7" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px;">7. Deltas & Assertions</span>
+            <span class="step-pill" data-step="1" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">1. Mint Control</span>
+            <span class="step-pill" data-step="2" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">2. Stimulus (Ctrl)</span>
+            <span class="step-pill" data-step="3" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">3. Record Ctrl</span>
+            <span class="step-pill" data-step="4" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">4. Mint Target</span>
+            <span class="step-pill" data-step="5" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">5. Stimulus (Target)</span>
+            <span class="step-pill" data-step="6" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">6. Record Target</span>
+            <span class="step-pill" data-step="7" style="background: rgba(255,255,255,0.05); border: 1px solid ${CSS.border}; color: ${CSS.dim}; font-size: 9px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;">7. Deltas & Assertions</span>
           </div>
         </div>
       </div>
@@ -238,7 +297,7 @@ export class DebuggerHUD {
       ">
         <!-- Telemetry Metrics & Deltas (Docked Left, Collapsible) -->
         <div id="hud-left-panel" style="
-          width: 290px;
+          width: 310px;
           flex-shrink: 0;
           pointer-events: auto;
           background: ${CSS.panel};
@@ -251,6 +310,7 @@ export class DebuggerHUD {
           overflow-y: auto;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
           transition: all 0.25s ease-in-out;
+          max-height: calc(100vh - 230px);
         ">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${CSS.border}; padding-bottom: 4px;">
             <span style="font-size: 11px; color: ${CSS.cyan}; font-weight: bold; letter-spacing: 0.05em;">📊 TELEMETRY & MOTORS</span>
@@ -259,7 +319,7 @@ export class DebuggerHUD {
 
           <div id="left-panel-content" style="display: flex; flex-direction: column; gap: 6px;">
             <div id="telemetry-rows" style="display: flex; flex-direction: column; gap: 6px;">
-              <!-- Rendered dynamically -->
+              <!-- Rendered dynamically with glowing gauges -->
             </div>
 
             <div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed ${CSS.border}; display: flex; justify-content: space-between; font-size: 10px;">
@@ -274,7 +334,7 @@ export class DebuggerHUD {
 
         <!-- AI Lab Notes & Unit Test Assertions (Docked Right, Clearance 268px from right edge so LabObserver sits safely to its right!) -->
         <div id="hud-right-panel" style="
-          width: 300px;
+          width: 320px;
           flex-shrink: 0;
           pointer-events: auto;
           margin-right: 268px;
@@ -288,6 +348,7 @@ export class DebuggerHUD {
           overflow-y: auto;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
           transition: all 0.25s ease-in-out;
+          max-height: calc(100vh - 230px);
         ">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${CSS.border}; padding-bottom: 4px;">
             <span style="font-size: 11px; color: ${CSS.violet}; font-weight: bold; letter-spacing: 0.05em;">🧪 ASSERTIONS & LOGS</span>
@@ -310,9 +371,9 @@ export class DebuggerHUD {
               display: flex;
               flex-direction: column;
               gap: 4px;
-              max-height: 110px;
+              max-height: 140px;
             ">
-              <div>[00:00:00] 🧪 Initialized Neuro-Debugger Workbench</div>
+              <div><span style="color:${CSS.dim}">[00:00:00]</span> 🧪 Initialized Neuro-Debugger Workbench</div>
             </div>
           </div>
         </div>
@@ -362,6 +423,8 @@ export class DebuggerHUD {
     const runBtn = this.container.querySelector('#btn-run-pipeline');
     const pauseBtn = this.container.querySelector('#btn-pause-pipeline');
     const exportBtn = this.container.querySelector('#btn-export-report');
+    const cheatsheetBtn = this.container.querySelector('#btn-cheatsheet');
+    const exportDiscBtn = this.container.querySelector('#btn-export-discoveries');
 
     const playBtn = this.container.querySelector('#btn-replay-play');
     const scrubber = this.container.querySelector('#timeline-scrubber');
@@ -387,9 +450,15 @@ export class DebuggerHUD {
     runBtn.addEventListener('click', () => this.runPipelineSweep());
     pauseBtn.addEventListener('click', () => this.togglePausePipeline());
     exportBtn.addEventListener('click', () => this.exportReport());
-
-    const cheatsheetBtn = this.container.querySelector('#btn-cheatsheet');
     cheatsheetBtn?.addEventListener('click', () => this.showCheatsheetModal());
+    exportDiscBtn?.addEventListener('click', () => {
+      if (this.autoDiscover) {
+        this.autoDiscover.exportFindingsJSON();
+        this.logNote(`Exported ${this.autoDiscover.findings.length} findings to JSON`, 'success');
+      } else {
+        this.logNote('No auto-discover engine attached.', 'warning');
+      }
+    });
 
     const autoDiscoverBtn = this.container.querySelector('#btn-auto-discover');
     autoDiscoverBtn?.addEventListener('click', async () => {
@@ -397,12 +466,13 @@ export class DebuggerHUD {
         if (this.autoDiscover.isScanning) {
           this.autoDiscover.stopScan();
           this.setTicker('⏸ Auto-Discover scan stopped.');
+          this.logNote('Auto-Discover scan stopped by user.', 'info');
         } else {
           const currentScenario = SCENARIOS.find(s => s.id === this.selectedScenario) || SCENARIOS[0];
           await this.autoDiscover.startScan(currentScenario);
         }
       } else {
-        this.addNote('Auto-Discover Engine not initialized.', 'warning');
+        this.logNote('Auto-Discover Engine not initialized.', 'warning');
       }
     });
 
@@ -555,7 +625,7 @@ export class DebuggerHUD {
 
   triggerAlert(msg) {
     this.setTicker(msg, true);
-    this.addNote(msg, 'warning');
+    this.addNote(msg, 'alert');
   }
 
   updateProgress(current, total, msg) {
@@ -657,7 +727,7 @@ export class DebuggerHUD {
             padding: 3px 6px;
             font-family: ${CSS.font};
             font-size: 11px;
-            width: 80px;
+            width: 100px;
           "/>
         `;
         const input = wrapper.querySelector('input');
@@ -706,13 +776,21 @@ export class DebuggerHUD {
       this.inputValue = val;
     });
 
-    // 2. Select Mutant or Unmapped Prefix
-    customPanel.addInput('Lesion Target (Prefix / Cell ID)', 'LC4', (targetPrefix) => {
-      this.customMutantSpec = { silence: [targetPrefix] };
-      // Highlight target cluster in floating 3D brain orb
-      if (this.lab.brain && this.lab.brain.pack) {
-        const indices = this.lab.brain.pack.indicesOfPrefix?.(targetPrefix) || this.lab.brain.pack.indicesOf?.(targetPrefix);
-        if (this.halo && indices && indices.length) this.halo.setCluster(indices);
+    // 2. Select Mutant or Unmapped Prefix (supports comma or + separated multi-gene knockout, e.g. LC4, LPLC2)
+    customPanel.addInput('Lesion Target (Prefix / List)', 'LC4', (targetStr) => {
+      const targets = targetStr.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+      this.customMutantSpec = { silence: targets };
+
+      // Highlight target cluster(s) in floating 3D brain orb
+      if (this.lab.brain && this.lab.brain.pack && this.halo) {
+        let combinedIndices = [];
+        for (const t of targets) {
+          const idx = this.lab.brain.pack.indicesOfPrefix?.(t) || this.lab.brain.pack.indicesOf?.(t) || [];
+          for (let i = 0; i < idx.length; i++) combinedIndices.push(idx[i]);
+        }
+        if (combinedIndices.length) {
+          this.halo.setCluster(new Int32Array(combinedIndices));
+        }
       }
     });
 
@@ -721,6 +799,7 @@ export class DebuggerHUD {
       const customScenario = {
         id: 'custom',
         name: `Custom Drive (${this.selectedInput}=${this.inputValue})`,
+        inputSummary: `${this.selectedInput}=${this.inputValue}`,
         setup: (brain) => brain.setInput(this.selectedInput, this.inputValue),
         teardown: (brain) => brain.setInput(this.selectedInput, 0)
       };
@@ -745,16 +824,19 @@ export class DebuggerHUD {
         pill.style.borderColor = CSS.cyan;
         pill.style.color = CSS.cyan;
         pill.style.fontWeight = 'bold';
+        pill.style.boxShadow = '0 0 8px rgba(0, 229, 255, 0.4)';
       } else if (stepNum < stepIndex) {
         pill.style.background = 'rgba(57, 255, 136, 0.15)';
         pill.style.borderColor = CSS.lime;
         pill.style.color = CSS.lime;
         pill.style.fontWeight = 'normal';
+        pill.style.boxShadow = 'none';
       } else {
         pill.style.background = 'rgba(255, 255, 255, 0.05)';
         pill.style.borderColor = CSS.border;
         pill.style.color = CSS.dim;
         pill.style.fontWeight = 'normal';
+        pill.style.boxShadow = 'none';
       }
     });
   }
@@ -764,15 +846,26 @@ export class DebuggerHUD {
     const container = this.container.querySelector('#log-notes-container');
     if (!container) return;
 
-    const typeIcons = { info: '🧪', success: '✅', warning: '⚡', error: '❌' };
-    const icon = typeIcons[type] || '🧪';
+    const typeStyles = {
+      info:      { icon: '🧪', color: CSS.cyan },
+      stimulus:  { icon: '⚡', color: CSS.amber },
+      mint:      { icon: msg.includes('Target') || msg.includes('Mutant') ? '🧬' : (msg.includes('Restored') ? '🔄' : '🪰'), color: msg.includes('Target') || msg.includes('Mutant') ? CSS.magenta : CSS.lime },
+      discovery: { icon: '🔍', color: '#ff2bd6' },
+      alert:     { icon: '🚨', color: CSS.red },
+      success:   { icon: '✅', color: CSS.lime },
+      warning:   { icon: '⚠️', color: CSS.amber },
+      error:     { icon: '❌', color: CSS.red }
+    };
+
+    const conf = typeStyles[type] || typeStyles.info;
 
     const div = document.createElement('div');
-    div.innerHTML = `<span style="color:${CSS.dim}">[${now}]</span> ${icon} ${msg}`;
+    div.style.cssText = `line-height: 1.35; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03);`;
+    div.innerHTML = `<span style="color:${CSS.dim}; font-size: 9px;">[${now}]</span> <span style="color:${conf.color}; font-weight:bold;">${conf.icon}</span> <span style="color:${conf.color};">${msg}</span>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 
-    this.notes.push(`[${now}] ${msg}`);
+    this.notes.push(`[${now}] ${conf.icon} ${msg}`);
   }
 
   togglePausePipeline() {
@@ -793,7 +886,7 @@ export class DebuggerHUD {
     if (pauseBtn) pauseBtn.style.display = 'inline-block';
 
     this.setTicker('🚀 Launching Pipeline Sweep...');
-    this.addNote(`Launching pipeline: Scenario=${this.selectedScenario}`, 'info');
+    this.addNote(`Launching pipeline sweep: Scenario=${this.selectedScenario}`, 'info');
 
     const ctrlObj = GENOTYPES.find(item => item.spec === this.selectedControlGenotype || item.id === this.selectedControlGenotype);
     const mutObj = GENOTYPES.find(item => item.spec === this.selectedMutantGenotype || item.id === this.selectedMutantGenotype);
@@ -809,6 +902,7 @@ export class DebuggerHUD {
       (prog) => {
         this.setTicker(prog.message);
         if (prog.step) this.updatePipelineStepHighlight(prog.step);
+        if (prog.log) this.addNote(prog.log.msg, prog.log.type);
       }
     );
 
@@ -817,7 +911,6 @@ export class DebuggerHUD {
     if (results) {
       this.lastPipelineResults = results;
       this.setTicker('✅ Pipeline complete! Control & Target traces recorded.', false);
-      this.addNote('Pipeline execution complete', 'success');
 
       const maxF = this.recorder.maxFrames;
       const scrubber = this.container.querySelector('#timeline-scrubber');
@@ -826,7 +919,7 @@ export class DebuggerHUD {
         scrubber.value = maxF - 1;
       }
 
-      this.updateTelemetryDeltas(results.metrics, results.controlName, results.mutantName);
+      this.updateTelemetryDeltas(results.peakMetrics || results.metrics, results.controlName, results.mutantName);
       this.updateAssertions(results);
     }
   }
@@ -862,29 +955,79 @@ export class DebuggerHUD {
 
     const list = [
       { key: 'DNa01', label: 'DNa01 (Steering)', val: metrics.DNa01 },
-      { key: 'DNp09', label: 'DNp09 (Speed)', val: metrics.DNp09 },
-      { key: 'DNp01', label: 'DNp01 (Escape)', val: metrics.DNp01 },
+      { key: 'DNp09', label: 'DNp09 (Speed)',    val: metrics.DNp09 },
+      { key: 'DNp01', label: 'DNp01 (Escape)',   val: metrics.DNp01 },
       { key: 'DNp13', label: 'DNp13 (Courtship)', val: metrics.DNp13 },
-      { key: 'DNp06', label: 'DNp06 (Feeding)', val: metrics.DNp06 },
+      { key: 'DNp06', label: 'DNp06 (Feeding)',  val: metrics.DNp06 },
     ];
 
     container.innerHTML = list.map(item => {
-      const ctrl = item.val.control.toFixed(3);
-      const mut = item.val.mutant.toFixed(3);
-      const delta = item.val.delta.toFixed(3);
-      const absDelta = Math.abs(item.val.delta);
-      const alertBadge = (showMutant && absDelta > 0.3) ? `<span style="color:${CSS.red}; font-weight:bold;">⚡ Δ>${absDelta.toFixed(2)}</span>` : '';
+      const ctrlNum = item.val.control;
+      const mutNum = item.val.mutant;
+      const deltaNum = item.val.delta;
+      const absDelta = Math.abs(deltaNum);
+
+      const ctrlPct = Math.min(100, Math.max(0, Math.abs(ctrlNum) * 100));
+      const mutPct = Math.min(100, Math.max(0, Math.abs(mutNum) * 100));
+
+      const isAnomaly = showMutant && absDelta > 0.3;
+      const alertBadge = isAnomaly
+        ? `<span style="background: rgba(255, 43, 214, 0.2); border: 1px solid ${CSS.magenta}; color: ${CSS.magenta}; padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: bold; animation: pulse 1s infinite;">⚡ Δ>${absDelta.toFixed(2)}</span>`
+        : '';
 
       return `
-        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(0, 229, 255, 0.1); border-radius: 4px; padding: 5px 8px;">
-          <div style="display: flex; justify-content: space-between; font-size: 10px;">
+        <div style="
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid ${isAnomaly ? CSS.magenta : 'rgba(0, 229, 255, 0.12)'};
+          border-radius: 6px;
+          padding: 6px 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
             <span style="color: ${CSS.cyan}; font-weight: bold;">${item.label}</span>
-            ${alertBadge}
+            <div style="display: flex; align-items: center; gap: 4px;">
+              ${alertBadge}
+              ${showMutant ? `<span style="font-size: 9px; color: ${absDelta > 0.3 ? CSS.magenta : (absDelta > 0.1 ? CSS.amber : CSS.bone)}; font-weight:bold;">Δ ${deltaNum > 0 ? '+' : ''}${deltaNum.toFixed(3)}</span>` : ''}
+            </div>
           </div>
-          <div style="display: flex; gap: 10px; margin-top: 3px; font-size: 10px; font-family: ${CSS.font}; flex-wrap: wrap;">
-            <span style="color: ${CSS.lime};" title="${ctrlName}">${ctrlName.slice(0, 10)}: ${ctrl}</span>
-            ${showMutant ? `<span style="color: ${CSS.magenta};" title="${mutName}">${mutName.slice(0, 10)}: ${mut}</span>` : ''}
-            ${showMutant ? `<span style="color: ${absDelta > 0.3 ? CSS.red : CSS.bone};">Δ: ${delta}</span>` : ''}
+
+          <!-- Dual Glowing Bar Gauges -->
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <!-- Control bar (Neon Lime) -->
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 9px;">
+              <span style="color: ${CSS.lime}; width: 42px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${ctrlName}">${ctrlName.slice(0, 6)}</span>
+              <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; position: relative;">
+                <div style="
+                  width: ${ctrlPct}%;
+                  height: 100%;
+                  background: #39ff88;
+                  box-shadow: 0 0 8px #39ff88;
+                  border-radius: 3px;
+                  transition: width 0.2s ease-out;
+                "></div>
+              </div>
+              <span style="color: ${CSS.bone}; width: 34px; text-align: right;">${ctrlNum.toFixed(3)}</span>
+            </div>
+
+            <!-- Target bar (Neon Magenta) -->
+            ${showMutant ? `
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 9px;">
+              <span style="color: ${CSS.magenta}; width: 42px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${mutName}">${mutName.slice(0, 6)}</span>
+              <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; position: relative;">
+                <div style="
+                  width: ${mutPct}%;
+                  height: 100%;
+                  background: #ff2bd6;
+                  box-shadow: 0 0 8px #ff2bd6;
+                  border-radius: 3px;
+                  transition: width 0.2s ease-out;
+                "></div>
+              </div>
+              <span style="color: ${CSS.bone}; width: 34px; text-align: right;">${mutNum.toFixed(3)}</span>
+            </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -898,13 +1041,15 @@ export class DebuggerHUD {
     const assertions = evaluateAssertions(pipelineResults);
     container.innerHTML = assertions.map(a => `
       <div style="
-        background: rgba(0,0,0,0.2);
+        background: rgba(0,0,0,0.25);
         border-left: 3px solid ${a.passed ? CSS.lime : CSS.red};
-        padding: 3px 6px;
+        padding: 4px 6px;
         border-radius: 2px;
+        margin-bottom: 2px;
       ">
         <div style="font-weight: bold; color: ${a.passed ? CSS.lime : CSS.red}; font-size: 10px;">${a.passed ? '✅ PASSED' : '❌ FAILED'}: ${a.title}</div>
-        <div style="color: ${CSS.dim}; font-size: 9px;">${a.detail}</div>
+        <div style="color: ${CSS.bone}; font-size: 9px; margin-top: 1px;">${a.detail}</div>
+        ${a.biologicalReason ? `<div style="color: ${CSS.dim}; font-size: 9px; font-style: italic; margin-top: 1px;">${a.biologicalReason}</div>` : ''}
       </div>
     `).join('');
   }
@@ -965,9 +1110,10 @@ export class DebuggerHUD {
       this.addNote('No pipeline results available to export. Run pipeline first.', 'warning');
       return;
     }
-    const content = generateMarkdownReport(this.lastPipelineResults, this.notes);
+    const discoveries = this.autoDiscover?.findings || [];
+    const content = generateMarkdownReport(this.lastPipelineResults, this.notes, discoveries);
     exportReportBrowser(content);
-    this.addNote('Exported discovery report: neuro_discovery_report.md', 'success');
+    this.addNote(`Exported discovery report: neuro_discovery_report.md (${discoveries.length} discoveries included)`, 'success');
   }
 
   dispose() {
