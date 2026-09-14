@@ -60,7 +60,7 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
     position: 'fixed', inset: '0', display: 'none', placeItems: 'center',
     background: 'rgba(11, 6, 20, 0.82) url(/public/madfly_lab_menu_bg.png) center/cover no-repeat',
     backdropFilter: 'blur(6px)',
-    zIndex: '30', font: `12px ${CSS.font}`, color: CSS.bone,
+    zIndex: '200', font: `12px ${CSS.font}`, color: CSS.bone,
   });
   root.style.display = 'none';
 
@@ -175,11 +175,40 @@ export function mountRoomMenu(lab, { onLog = () => {}, onEnterFreeRoaming = () =
   root.appendChild(card);
   document.body.appendChild(root);
 
-  const show = () => { root.style.display = 'grid'; };
-  const hide = () => { root.style.display = 'none'; };
-  const toggle = () => { root.style.display === 'none' ? show() : hide(); };
+  const show = () => {
+    root.style.display = 'grid';
+    if (neuroDebugger?.hud) {
+      neuroDebugger.hud.hide();
+    } else {
+      const el = document.getElementById('neuro-debugger-workbench');
+      if (el) el.style.display = 'none';
+    }
+    const cheatsheet = document.getElementById('neuro-cheatsheet-modal');
+    if (cheatsheet) cheatsheet.style.display = 'none';
+  };
+
+  const hide = () => {
+    root.style.display = 'none';
+    if (neuroDebugger?.hud) {
+      neuroDebugger.hud.show();
+    } else {
+      const el = document.getElementById('neuro-debugger-workbench');
+      if (el) el.style.display = 'flex';
+    }
+    const cheatsheet = document.getElementById('neuro-cheatsheet-modal');
+    if (cheatsheet) cheatsheet.style.display = '';
+  };
+
+  const toggle = () => {
+    if (root.style.display === 'none') {
+      show();
+    } else {
+      hide();
+    }
+  };
 
   window.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
     if (e.key === 'm' || e.key === 'M') toggle();
     if (e.key === 'Escape') hide();
   });

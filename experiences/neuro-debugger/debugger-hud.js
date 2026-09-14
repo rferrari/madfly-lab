@@ -21,7 +21,7 @@ export class DebuggerHUD {
       position: fixed;
       inset: 0;
       pointer-events: none;
-      z-index: 100;
+      z-index: 20;
       font-family: ${CSS.font};
       color: ${CSS.bone};
       display: flex;
@@ -507,6 +507,30 @@ export class DebuggerHUD {
     document.body.appendChild(this.container);
     this.updateLiveTelemetry();
     this._setupCustomPanel();
+
+    this._onKeyDown = (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+      if (e.key === 'h' || e.key === 'H') {
+        this.toggle();
+      }
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+  }
+
+  show() {
+    this.container.style.display = 'flex';
+  }
+
+  hide() {
+    this.container.style.display = 'none';
+  }
+
+  toggle() {
+    if (this.container.style.display === 'none') {
+      this.show();
+    } else {
+      this.hide();
+    }
   }
 
   showCheatsheetModal() {
@@ -1117,6 +1141,7 @@ export class DebuggerHUD {
   }
 
   dispose() {
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
     if (this.replayTimer) clearInterval(this.replayTimer);
     this.container.remove();
   }

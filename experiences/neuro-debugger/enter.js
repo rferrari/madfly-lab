@@ -59,6 +59,9 @@ export function enterDebugger(lab) {
     runner,
     autoDiscover,
     halo,
+    show() { hud.show(); },
+    hide() { hud.hide(); },
+    toggle() { hud.toggle(); },
     dispose() {
       clearInterval(ticker);
       hud.dispose();
